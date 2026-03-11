@@ -35,6 +35,8 @@ poetry run ruff check .
 
 Prefer container-based development? Open the repository in the dev container defined in `.devcontainer/devcontainer.json`.
 It includes a minimal extension set with Python, Ruff, Snyk, and SonarQube support.
+The dev container builds from a project Dockerfile and uses Python 3.14 to match project requirements.
+Dependencies are installed automatically on first create and re-synchronised when `poetry.lock` changes.
 
 ### Before submitting a pull request
 
@@ -83,6 +85,7 @@ Prereqs:
 - Python 3.14
 - Poetry
 - Docker Desktop (optional, for dev container workflow)
+- Node.js 20.12.0+ (optional, required for SonarQube analysis and Snyk scanning)
 
 Common tasks:
 
@@ -96,3 +99,57 @@ poetry run pytest tests/test_smoke.py::test_version_exits_zero
 # Format code (if supported)
 poetry run ruff check . --fix
 ```
+
+### VS Code tooling troubleshooting
+
+If you develop locally (not in dev container), install these tools on your host:
+
+**Snyk CLI** — Required for Snyk vulnerability scanning.
+
+On Windows:
+```powershell
+# Option 1: Using winget (recommended)
+winget install Snyk.Snyk
+
+# Option 2: Using Chocolatey
+choco install snyk
+
+# Verify
+snyk --version
+```
+
+On macOS:
+```bash
+brew install snyk
+snyk --version
+```
+
+On Linux:
+```bash
+npm install -g snyk
+snyk --version
+```
+
+**Fixing "snyk-win.exe not found" error in VS Code:**
+
+If the Snyk extension shows `ENOENT` error trying to launch `snyk-win.exe`:
+
+1. Uninstall the Snyk extension from your local VS Code
+2. Delete this folder (if it exists):
+   ```
+   C:\Users\<username>\AppData\Local\snyk\vscode-cli
+   ```
+3. Reinstall the Snyk extension
+4. Reload VS Code
+5. Optional: In VS Code User Settings, add:
+   ```json
+   {
+     "snyk.path": "snyk"
+   }
+   ```
+   This tells it to use a globally installed Snyk CLI instead of the bundled one.
+
+**Developing in dev container:**
+
+All tooling (Node.js, Snyk CLI, Python, Poetry) is pre-installed.
+No additional setup required beyond opening in the dev container.

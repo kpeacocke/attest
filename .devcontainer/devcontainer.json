@@ -1,7 +1,11 @@
 {
   "name": "attest-dev",
-  "image": "mcr.microsoft.com/devcontainers/python:1-3.14-bookworm",
-  "postCreateCommand": "pip install --upgrade pip && pip install poetry && poetry install",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": ".."
+  },
+  "postCreateCommand": "poetry config virtualenvs.in-project true && poetry install --no-interaction --no-ansi",
+  "postStartCommand": "bash -lc 'if [ -f poetry.lock ]; then current=$(sha256sum poetry.lock | cut -d\" \" -f1); saved=$(cat .devcontainer/.poetry.lock.sha256 2>/dev/null || true); if [ ! -d .venv ] || [ \"$current\" != \"$saved\" ]; then poetry install --no-interaction --no-ansi && echo \"$current\" > .devcontainer/.poetry.lock.sha256; fi; fi'",
   "customizations": {
     "vscode": {
       "extensions": [
@@ -12,6 +16,11 @@
         "SonarSource.sonarlint-vscode"
       ],
       "settings": {
+        "remote.extensionKind": {
+          "snyk-security.snyk-vulnerability-scanner": [
+            "workspace"
+          ]
+        },
         "python.defaultInterpreterPath": "/usr/local/bin/python",
         "python.analysis.typeCheckingMode": "basic",
         "editor.formatOnSave": true,
@@ -21,5 +30,5 @@
       }
     }
   },
-  "remoteUser": "vscode"
+  "remoteUser": "root"
 }
