@@ -38,7 +38,9 @@ class JobExecutor:
         self.results: list[JobResult] = []
         self.registry = build_builtin_registry()
 
-    def add_target(self, host: str, description: str = "", ssh_config: dict[str, Any] | None = None) -> None:
+    def add_target(
+        self, host: str, description: str = "", ssh_config: dict[str, Any] | None = None
+    ) -> None:
         """Add a target to the job."""
         target = JobTarget(
             host=host,
