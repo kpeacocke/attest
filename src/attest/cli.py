@@ -68,8 +68,7 @@ def _cmd_validate(args: argparse.Namespace) -> int:
     result = validate_bundle(profile, controls)
     if result.valid:
         print(
-            f"Profile '{profile.name}' v{profile.version} is valid "
-            f"({len(controls)} controls)."
+            f"Profile '{profile.name}' v{profile.version} is valid " f"({len(controls)} controls)."
         )
         return 0
 

@@ -3,12 +3,17 @@
 from __future__ import annotations
 
 from pathlib import Path
+from subprocess import CompletedProcess
+
+import pytest
 
 from attest.resources.builtin import build_builtin_registry
 from attest.resources.command import CommandResource
 from attest.resources.file import FileResource
 from attest.resources.os_facts import OsFactsResource
 from attest.resources.package import PackageResource
+from attest.resources.port import PortResource
+from attest.resources.process import ProcessResource
 from attest.resources.service import ServiceResource
 from attest.resources.ssh_config import SshConfigResource
 from attest.resources.sysctl import SysctlResource
@@ -96,6 +101,119 @@ class TestServiceResource:
         assert "enabled" in result.data
 
 
+class TestProcessResource:
+    def test_missing_ps_returns_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr("attest.resources.process.shutil.which", lambda _cmd: None)
+        resource = ProcessResource()
+        result = resource.query({})
+        assert result.errors
+        assert "ps" in result.errors[0]
+
+    def test_invalid_pid_returns_error(self) -> None:
+        resource = ProcessResource()
+        result = resource.query({"pid": "abc"})
+        assert result.errors
+
+    def test_filters_processes_and_projects_fields(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr("attest.resources.process.shutil.which", lambda _cmd: "/usr/bin/ps")
+        monkeypatch.setattr(
+            "attest.resources.process.subprocess.run",
+            lambda *args, **kwargs: CompletedProcess(
+                args=args[0],
+                returncode=0,
+                stdout="100 root sshd\n200 daemon cron\n201 root sshd\n",
+                stderr="",
+            ),
+        )
+
+        resource = ProcessResource()
+        monkeypatch.setattr(resource, "_read_capabilities", lambda _pid: "00000000a80425fb")
+
+        result = resource.query({"name": "sshd"})
+        assert not result.errors
+        assert result.data["exists"] is True
+        assert result.data["count"] == 2
+        assert result.data["pids"] == [100, 201]
+        assert result.data["users"] == ["root"]
+        assert result.data["processes"][0]["capabilities"] == "00000000a80425fb"
+
+    def test_field_projection_returns_scalar(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr("attest.resources.process.shutil.which", lambda _cmd: "/usr/bin/ps")
+        monkeypatch.setattr(
+            "attest.resources.process.subprocess.run",
+            lambda *args, **kwargs: CompletedProcess(
+                args=args[0],
+                returncode=0,
+                stdout="100 root sshd\n",
+                stderr="",
+            ),
+        )
+
+        resource = ProcessResource()
+        monkeypatch.setattr(resource, "_read_capabilities", lambda _pid: None)
+        result = resource.query({"name": "sshd", "field": "count"})
+        assert result.data == 1
+
+
+class TestPortResource:
+    def test_missing_ss_returns_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr("attest.resources.port.shutil.which", lambda _cmd: None)
+        resource = PortResource()
+        result = resource.query({})
+        assert result.errors
+        assert "ss" in result.errors[0]
+
+    def test_invalid_port_returns_error(self) -> None:
+        resource = PortResource()
+        result = resource.query({"port": "abc"})
+        assert result.errors
+
+    def test_invalid_protocol_returns_error(self) -> None:
+        resource = PortResource()
+        result = resource.query({"protocol": "icmp"})
+        assert result.errors
+
+    def test_filters_listeners(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr("attest.resources.port.shutil.which", lambda _cmd: "/usr/bin/ss")
+        monkeypatch.setattr(
+            "attest.resources.port.subprocess.run",
+            lambda *args, **kwargs: CompletedProcess(
+                args=args[0],
+                returncode=0,
+                stdout=(
+                    "tcp LISTEN 0 128 0.0.0.0:22 0.0.0.0:*\n"
+                    "udp UNCONN 0 0 127.0.0.53%lo:53 0.0.0.0:*\n"
+                    "tcp LISTEN 0 128 [::]:22 [::]:*\n"
+                ),
+                stderr="",
+            ),
+        )
+
+        resource = PortResource()
+        result = resource.query({"protocol": "tcp", "port": 22})
+        assert not result.errors
+        assert result.data["listening"] is True
+        assert result.data["count"] == 2
+        assert result.data["ports"] == [22, 22]
+        assert result.data["listeners"][0]["protocol"] == "tcp"
+
+    def test_field_projection_returns_scalar(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr("attest.resources.port.shutil.which", lambda _cmd: "/usr/bin/ss")
+        monkeypatch.setattr(
+            "attest.resources.port.subprocess.run",
+            lambda *args, **kwargs: CompletedProcess(
+                args=args[0],
+                returncode=0,
+                stdout="tcp LISTEN 0 128 0.0.0.0:22 0.0.0.0:*\n",
+                stderr="",
+            ),
+        )
+
+        resource = PortResource()
+        result = resource.query({"port": "22", "field": "count"})
+        assert result.data == 1
+
+
 class TestSysctlResource:
     def test_missing_key_returns_error(self) -> None:
         resource = SysctlResource()
@@ -164,6 +282,8 @@ class TestBuiltinRegistry:
     def test_contains_new_resources(self) -> None:
         registry = build_builtin_registry()
         assert registry.has("package")
+        assert registry.has("port")
+        assert registry.has("process")
         assert registry.has("service")
         assert registry.has("ssh_config")
         assert registry.has("sysctl")

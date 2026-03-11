@@ -88,14 +88,18 @@ def test_run_exits_three_for_unknown_resource(tmp_path: Path) -> None:
 
 
 def test_run_exits_zero_for_passing_builtin_resource(tmp_path: Path) -> None:
-    profile_dir = _make_profile_dir(tmp_path, VALID_PROFILE_YAML, {"os001.yml": PASSING_CONTROL_YAML})
+    profile_dir = _make_profile_dir(
+        tmp_path, VALID_PROFILE_YAML, {"os001.yml": PASSING_CONTROL_YAML}
+    )
     out_dir = tmp_path / "out"
     rc = main(["run", str(profile_dir), "--out", str(out_dir)])
     assert rc == 0
 
 
 def test_run_writes_json_and_summary(tmp_path: Path) -> None:
-    profile_dir = _make_profile_dir(tmp_path, VALID_PROFILE_YAML, {"os001.yml": PASSING_CONTROL_YAML})
+    profile_dir = _make_profile_dir(
+        tmp_path, VALID_PROFILE_YAML, {"os001.yml": PASSING_CONTROL_YAML}
+    )
     out_dir = tmp_path / "out"
     main(["run", str(profile_dir), "--out", str(out_dir)])
     assert (out_dir / "report.json").exists()
@@ -103,7 +107,9 @@ def test_run_writes_json_and_summary(tmp_path: Path) -> None:
 
 
 def test_run_all_formats(tmp_path: Path) -> None:
-    profile_dir = _make_profile_dir(tmp_path, VALID_PROFILE_YAML, {"os001.yml": PASSING_CONTROL_YAML})
+    profile_dir = _make_profile_dir(
+        tmp_path, VALID_PROFILE_YAML, {"os001.yml": PASSING_CONTROL_YAML}
+    )
     out_dir = tmp_path / "out"
     main(
         [
