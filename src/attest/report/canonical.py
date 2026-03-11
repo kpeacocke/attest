@@ -3,6 +3,7 @@
 The canonical report is the source of truth; all other formats are derived
 from it.  Field ordering is deterministic for stable diff comparisons (REQ-7.4).
 """
+
 from __future__ import annotations
 
 import json
@@ -25,7 +26,9 @@ _STATUS_WEIGHT: dict[ControlStatus, float] = {
 }
 
 
-def _tag_summaries(controls_by_id: dict[str, Control], results: list[ControlResult]) -> dict[str, Any]:
+def _tag_summaries(
+    controls_by_id: dict[str, Control], results: list[ControlResult]
+) -> dict[str, Any]:
     """Build framework tag summaries grouped by namespace (REQ-4.1)."""
     nist: dict[str, int] = {}
     cis_levels: dict[int, int] = {}

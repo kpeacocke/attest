@@ -1,4 +1,5 @@
 """Waiver schema (REQ-5.1)."""
+
 from __future__ import annotations
 
 from datetime import date

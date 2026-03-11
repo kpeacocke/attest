@@ -1,4 +1,5 @@
 """Profile and control validation logic (REQ-1.1, REQ-1.2, REQ-1.3)."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field

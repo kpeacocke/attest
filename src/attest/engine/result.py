@@ -1,4 +1,5 @@
 """Result types and control status semantics for the evaluation engine (REQ-3.1)."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -19,6 +20,8 @@ class ControlStatus(str, Enum):
 @dataclass
 class TestEvidence:
     """Evidence produced by evaluating one test assertion."""
+
+    __test__ = False
 
     name: str
     resource: str

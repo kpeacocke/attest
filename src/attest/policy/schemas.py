@@ -1,4 +1,5 @@
 """Pydantic schemas for Attest policy objects (REQ-1.1, REQ-1.2, REQ-1.3)."""
+
 from __future__ import annotations
 
 from typing import Annotated, Any
@@ -16,6 +17,7 @@ ControlId = Annotated[str, Field(pattern=r"^[A-Za-z0-9_\-]+$")]
 # ---------------------------------------------------------------------------
 # Profile input (REQ-1.3)
 # ---------------------------------------------------------------------------
+
 
 class ProfileInput(BaseModel):
     """A typed input parameter declared by a profile."""
@@ -39,6 +41,7 @@ class ProfileInput(BaseModel):
 # Profile dependency (REQ-1.4)
 # ---------------------------------------------------------------------------
 
+
 class ProfileDependency(BaseModel):
     """A declared dependency on another profile or overlay."""
 
@@ -51,6 +54,7 @@ class ProfileDependency(BaseModel):
 # ---------------------------------------------------------------------------
 # Control tags (REQ-1.2) — structured namespace keys
 # ---------------------------------------------------------------------------
+
 
 class ControlTags(BaseModel):
     """Structured compliance framework tag mappings."""
@@ -89,6 +93,8 @@ VALID_OPERATORS = frozenset(
 class TestAssertion(BaseModel):
     """A single test assertion within a control."""
 
+    __test__ = False
+
     name: str
     resource: str
     operator: str
@@ -110,6 +116,7 @@ class TestAssertion(BaseModel):
 # Control source provenance (REQ-1.2)
 # ---------------------------------------------------------------------------
 
+
 class ControlSource(BaseModel):
     """Provenance block: where this control content came from."""
 
@@ -121,6 +128,7 @@ class ControlSource(BaseModel):
 # ---------------------------------------------------------------------------
 # Control (REQ-1.2)
 # ---------------------------------------------------------------------------
+
 
 class Control(BaseModel):
     """A single compliance control with tests."""
@@ -144,15 +152,14 @@ class Control(BaseModel):
     @model_validator(mode="after")
     def _no_conflicting_predicates(self) -> "Control":
         if self.only_if and self.skip_if:
-            raise ValueError(
-                f"Control '{self.id}' has both 'only_if' and 'skip_if'; use only one."
-            )
+            raise ValueError(f"Control '{self.id}' has both 'only_if' and 'skip_if'; use only one.")
         return self
 
 
 # ---------------------------------------------------------------------------
 # Profile supports block (REQ-1.1)
 # ---------------------------------------------------------------------------
+
 
 class PlatformSupport(BaseModel):
     """Platform applicability hint for a profile."""
@@ -165,6 +172,7 @@ class PlatformSupport(BaseModel):
 # ---------------------------------------------------------------------------
 # Profile (REQ-1.1)
 # ---------------------------------------------------------------------------
+
 
 class Profile(BaseModel):
     """Top-level profile definition."""

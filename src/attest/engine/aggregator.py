@@ -1,4 +1,5 @@
 """Aggregate test results into a control-level status (REQ-3.1)."""
+
 from __future__ import annotations
 
 from attest.engine.result import ControlResult, ControlStatus, TestEvidence

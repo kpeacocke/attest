@@ -1,4 +1,5 @@
 """YAML loader for Attest profiles and controls (REQ-1.1, REQ-1.2)."""
+
 from __future__ import annotations
 
 from pathlib import Path

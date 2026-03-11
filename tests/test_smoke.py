@@ -1,4 +1,5 @@
 """Smoke tests and CLI exit code tests (REQ-7.2, REQ-7.3)."""
+
 from __future__ import annotations
 
 import textwrap
@@ -13,6 +14,7 @@ from attest.cli import main
 # Version command
 # ---------------------------------------------------------------------------
 
+
 def test_version_exits_zero(capsys: pytest.CaptureFixture[str]) -> None:
     rc = main(["version"])
     out = capsys.readouterr().out
@@ -24,7 +26,10 @@ def test_version_exits_zero(capsys: pytest.CaptureFixture[str]) -> None:
 # Validate command (REQ-7.1, REQ-7.2)
 # ---------------------------------------------------------------------------
 
-def _make_profile_dir(tmp_path: Path, profile_yaml: str, controls: dict[str, str] | None = None) -> Path:
+
+def _make_profile_dir(
+    tmp_path: Path, profile_yaml: str, controls: dict[str, str] | None = None
+) -> Path:
     (tmp_path / "profile.yml").write_text(textwrap.dedent(profile_yaml), encoding="utf-8")
     if controls:
         ctrl_dir = tmp_path / "controls"
@@ -51,7 +56,9 @@ VALID_CONTROL_YAML = """
 """
 
 
-def test_validate_valid_profile_exits_zero(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+def test_validate_valid_profile_exits_zero(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     profile_dir = _make_profile_dir(tmp_path, VALID_PROFILE_YAML, {"lh001.yml": VALID_CONTROL_YAML})
     rc = main(["validate", str(profile_dir)])
     assert rc == 0
@@ -76,6 +83,7 @@ def test_validate_invalid_schema_exits_four(tmp_path: Path) -> None:
 # Run command (REQ-7.1, REQ-7.2)
 # ---------------------------------------------------------------------------
 
+
 def test_run_exits_three_for_errors(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     """Bootstrap run with controls produces ERROR (no resource layer yet) → exit 3."""
     profile_dir = _make_profile_dir(tmp_path, VALID_PROFILE_YAML, {"lh001.yml": VALID_CONTROL_YAML})
@@ -98,12 +106,18 @@ def test_run_all_formats(tmp_path: Path) -> None:
     out_dir = tmp_path / "out"
     main(
         [
-            "run", str(profile_dir),
-            "--out", str(out_dir),
-            "--format", "json",
-            "--format", "junit",
-            "--format", "markdown",
-            "--format", "summary",
+            "run",
+            str(profile_dir),
+            "--out",
+            str(out_dir),
+            "--format",
+            "json",
+            "--format",
+            "junit",
+            "--format",
+            "markdown",
+            "--format",
+            "summary",
         ]
     )
     assert (out_dir / "report.json").exists()

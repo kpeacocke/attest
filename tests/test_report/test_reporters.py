@@ -1,8 +1,11 @@
 """Tests for JUnit and Markdown reporters (REQ-4.2)."""
+
 from __future__ import annotations
 
-from attest.engine.result import ControlResult, ControlStatus, TestEvidence
-from attest.policy.schemas import Control, Profile, TestAssertion
+from attest.engine import result as engine_result
+from attest.engine.result import ControlResult, ControlStatus
+from attest.policy import schemas as policy_schemas
+from attest.policy.schemas import Control, Profile
 from attest.report.canonical import build_report
 from attest.report.junit import build_junit
 from attest.report.markdown import build_markdown
@@ -14,13 +17,13 @@ def _base_report(status: ControlStatus = ControlStatus.PASS) -> dict:
     ctrl = Control(
         id="X-001",
         title="Test",
-        tests=[TestAssertion(name="t", resource="r", operator="eq", expected="x")],
+        tests=[policy_schemas.TestAssertion(name="t", resource="r", operator="eq", expected="x")],
     )
     result = ControlResult(
         control_id="X-001",
         status=status,
         tests=[
-            TestEvidence(
+            engine_result.TestEvidence(
                 name="t",
                 resource="r",
                 operator="eq",

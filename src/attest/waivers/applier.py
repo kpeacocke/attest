@@ -1,4 +1,5 @@
 """Apply waivers to control results (REQ-5.2)."""
+
 from __future__ import annotations
 
 from datetime import date

@@ -1,4 +1,5 @@
 """Summary artefact generator — attest-summary.json (REQ-4.4)."""
+
 from __future__ import annotations
 
 import json

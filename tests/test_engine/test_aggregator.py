@@ -1,12 +1,13 @@
 """Tests for aggregator (REQ-3.1 aggregation rules)."""
+
 from __future__ import annotations
 
 from attest.engine.aggregator import aggregate
-from attest.engine.result import ControlStatus, TestEvidence
+from attest.engine.result import ControlStatus, TestEvidence as EvidenceModel
 
 
-def _evidence(status: ControlStatus, name: str = "t") -> TestEvidence:
-    return TestEvidence(
+def _evidence(status: ControlStatus, name: str = "t") -> EvidenceModel:
+    return EvidenceModel(
         name=name,
         resource="r",
         operator="eq",

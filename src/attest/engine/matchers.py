@@ -3,6 +3,7 @@
 Each matcher returns (passed: bool, message: str).
 Failures produce structured evidence: observed, expected, operator, and message.
 """
+
 from __future__ import annotations
 
 import re
@@ -30,6 +31,7 @@ def _to_number(value: Any) -> float | None:
 # ---------------------------------------------------------------------------
 # Individual matcher functions: (actual, expected) -> (passed, message)
 # ---------------------------------------------------------------------------
+
 
 def match_eq(actual: Any, expected: Any) -> tuple[bool, str]:
     passed = str(actual) == str(expected)
