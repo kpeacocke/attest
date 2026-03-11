@@ -752,3 +752,199 @@ class TestBuiltinRegistry:
         assert registry.has("ssh_config")
         assert registry.has("sysctl")
         assert registry.has("user")
+        assert registry.has("ini_file")
+        assert registry.has("json_file")
+        assert registry.has("yaml_file")
+
+
+class TestJsonFileResource:
+    """REQ-2.4: JSON structured config file parser."""
+
+    def test_reads_whole_document(self, tmp_path: Path) -> None:
+        from attest.resources.json_file import JsonFileResource
+
+        f = tmp_path / "data.json"
+        f.write_text('{"a": 1, "b": [2, 3]}', encoding="utf-8")
+
+        result = JsonFileResource().query({"path": str(f)})
+        assert not result.errors
+        assert result.data == {"a": 1, "b": [2, 3]}
+
+    def test_dotted_query_returns_nested_value(self, tmp_path: Path) -> None:
+        from attest.resources.json_file import JsonFileResource
+
+        f = tmp_path / "data.json"
+        f.write_text('{"server": {"port": 8080}}', encoding="utf-8")
+
+        result = JsonFileResource().query({"path": str(f), "query": "server.port"})
+        assert not result.errors
+        assert result.data == 8080
+
+    def test_list_index_access(self, tmp_path: Path) -> None:
+        from attest.resources.json_file import JsonFileResource
+
+        f = tmp_path / "data.json"
+        f.write_text('{"items": ["a", "b", "c"]}', encoding="utf-8")
+
+        result = JsonFileResource().query({"path": str(f), "query": "items.1"})
+        assert not result.errors
+        assert result.data == "b"
+
+    def test_missing_key_returns_error(self, tmp_path: Path) -> None:
+        from attest.resources.json_file import JsonFileResource
+
+        f = tmp_path / "data.json"
+        f.write_text('{"a": 1}', encoding="utf-8")
+
+        result = JsonFileResource().query({"path": str(f), "query": "missing"})
+        assert result.errors
+        assert "missing" in result.errors[0]
+
+    def test_missing_file_returns_error(self, tmp_path: Path) -> None:
+        from attest.resources.json_file import JsonFileResource
+
+        result = JsonFileResource().query({"path": str(tmp_path / "nope.json")})
+        assert result.errors
+
+    def test_invalid_json_returns_error(self, tmp_path: Path) -> None:
+        from attest.resources.json_file import JsonFileResource
+
+        f = tmp_path / "bad.json"
+        f.write_text("{not valid json}", encoding="utf-8")
+
+        result = JsonFileResource().query({"path": str(f)})
+        assert result.errors
+        assert "JSON parse error" in result.errors[0]
+
+    def test_missing_path_param_returns_error(self) -> None:
+        from attest.resources.json_file import JsonFileResource
+
+        result = JsonFileResource().query({})
+        assert result.errors
+
+
+class TestYamlFileResource:
+    """REQ-2.4: YAML structured config file parser."""
+
+    def test_reads_whole_document(self, tmp_path: Path) -> None:
+        from attest.resources.yaml_file import YamlFileResource
+
+        f = tmp_path / "data.yml"
+        f.write_text("server:\n  port: 8080\n  host: localhost\n", encoding="utf-8")
+
+        result = YamlFileResource().query({"path": str(f)})
+        assert not result.errors
+        assert result.data == {"server": {"port": 8080, "host": "localhost"}}
+
+    def test_dotted_query_returns_nested_value(self, tmp_path: Path) -> None:
+        from attest.resources.yaml_file import YamlFileResource
+
+        f = tmp_path / "data.yml"
+        f.write_text("server:\n  port: 8080\n", encoding="utf-8")
+
+        result = YamlFileResource().query({"path": str(f), "query": "server.port"})
+        assert not result.errors
+        assert result.data == 8080
+
+    def test_missing_key_returns_error(self, tmp_path: Path) -> None:
+        from attest.resources.yaml_file import YamlFileResource
+
+        f = tmp_path / "data.yml"
+        f.write_text("a: 1\n", encoding="utf-8")
+
+        result = YamlFileResource().query({"path": str(f), "query": "missing"})
+        assert result.errors
+        assert "missing" in result.errors[0]
+
+    def test_missing_file_returns_error(self, tmp_path: Path) -> None:
+        from attest.resources.yaml_file import YamlFileResource
+
+        result = YamlFileResource().query({"path": "/nonexistent/path.yml"})
+        assert result.errors
+
+    def test_invalid_yaml_returns_error(self, tmp_path: Path) -> None:
+        from attest.resources.yaml_file import YamlFileResource
+
+        f = tmp_path / "bad.yml"
+        f.write_text("key: [unclosed bracket\n", encoding="utf-8")
+
+        result = YamlFileResource().query({"path": str(f)})
+        assert result.errors
+        assert "YAML parse error" in result.errors[0]
+
+    def test_list_index_access(self, tmp_path: Path) -> None:
+        from attest.resources.yaml_file import YamlFileResource
+
+        f = tmp_path / "data.yml"
+        f.write_text("items:\n  - alpha\n  - beta\n  - gamma\n", encoding="utf-8")
+
+        result = YamlFileResource().query({"path": str(f), "query": "items.2"})
+        assert not result.errors
+        assert result.data == "gamma"
+
+
+class TestIniFileResource:
+    """REQ-2.4: INI/config structured file parser."""
+
+    def test_reads_whole_document(self, tmp_path: Path) -> None:
+        from attest.resources.ini_file import IniFileResource
+
+        f = tmp_path / "app.cfg"
+        f.write_text("[server]\nport = 8080\nhost = localhost\n", encoding="utf-8")
+
+        result = IniFileResource().query({"path": str(f)})
+        assert not result.errors
+        assert "server" in result.data
+        assert result.data["server"]["port"] == "8080"
+
+    def test_reads_section(self, tmp_path: Path) -> None:
+        from attest.resources.ini_file import IniFileResource
+
+        f = tmp_path / "app.cfg"
+        f.write_text("[server]\nport = 9090\n[db]\nname = mydb\n", encoding="utf-8")
+
+        result = IniFileResource().query({"path": str(f), "section": "db"})
+        assert not result.errors
+        assert result.data == {"name": "mydb"}
+
+    def test_reads_specific_key(self, tmp_path: Path) -> None:
+        from attest.resources.ini_file import IniFileResource
+
+        f = tmp_path / "app.cfg"
+        f.write_text("[auth]\nenabled = true\n", encoding="utf-8")
+
+        result = IniFileResource().query({"path": str(f), "section": "auth", "key": "enabled"})
+        assert not result.errors
+        assert result.data == "true"
+
+    def test_missing_section_returns_error(self, tmp_path: Path) -> None:
+        from attest.resources.ini_file import IniFileResource
+
+        f = tmp_path / "app.cfg"
+        f.write_text("[server]\nport = 80\n", encoding="utf-8")
+
+        result = IniFileResource().query({"path": str(f), "section": "missing"})
+        assert result.errors
+        assert "missing" in result.errors[0]
+
+    def test_missing_key_returns_error(self, tmp_path: Path) -> None:
+        from attest.resources.ini_file import IniFileResource
+
+        f = tmp_path / "app.cfg"
+        f.write_text("[server]\nport = 80\n", encoding="utf-8")
+
+        result = IniFileResource().query({"path": str(f), "section": "server", "key": "timeout"})
+        assert result.errors
+        assert "timeout" in result.errors[0]
+
+    def test_missing_file_returns_error(self, tmp_path: Path) -> None:
+        from attest.resources.ini_file import IniFileResource
+
+        result = IniFileResource().query({"path": "/nonexistent/path.cfg"})
+        assert result.errors
+
+    def test_missing_path_param_returns_error(self) -> None:
+        from attest.resources.ini_file import IniFileResource
+
+        result = IniFileResource().query({})
+        assert result.errors

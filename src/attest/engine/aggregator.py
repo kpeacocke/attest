@@ -27,6 +27,14 @@ def aggregate(control_id: str, test_evidence: list[TestEvidence]) -> ControlResu
         final = ControlStatus.FAIL
     elif ControlStatus.ERROR in statuses:
         final = ControlStatus.ERROR
+    elif statuses == {ControlStatus.SKIP}:
+        # All evidence was skipped (e.g. empty for_each collection — REQ-3.4).
+        return ControlResult(
+            control_id=control_id,
+            status=ControlStatus.SKIP,
+            tests=list(test_evidence),
+            skip_reason=test_evidence[0].message if test_evidence else "",
+        )
     else:
         final = ControlStatus.PASS
 

@@ -1,18 +1,158 @@
-"""Evaluation pipeline for controls (REQ-3.1, REQ-3.2)."""
+"""Evaluation pipeline for controls (REQ-3.1, REQ-3.2, REQ-3.4)."""
 
 from __future__ import annotations
+
+from typing import Any
 
 from attest.engine.applicability import evaluate_applicability
 from attest.engine.aggregator import aggregate
 from attest.engine.cache import ResourceCache
 from attest.engine.matchers import evaluate as evaluate_matcher
 from attest.engine.result import ControlResult, ControlStatus, TestEvidence
-from attest.policy.schemas import Control
+from attest.policy.schemas import Control, TestAssertion
 from attest.resources.interfaces import ResourceRegistry
 
 
 def _test_status_from_passed(passed: bool) -> ControlStatus:
     return ControlStatus.PASS if passed else ControlStatus.FAIL
+
+
+def _evaluate_single_test(
+    *,
+    test: TestAssertion,
+    params: dict[str, Any],
+    host: str,
+    registry: ResourceRegistry,
+    cache: ResourceCache,
+    label_suffix: str = "",
+) -> TestEvidence:
+    """Evaluate one test against a single resource call."""
+    cached = cache.get(host, test.resource, params)
+    if cached is not None:
+        resource_result = cached
+    else:
+        resource_result = registry.query(test.resource, params)
+        cache.set(host, test.resource, params, resource_result)
+
+    name = test.name + label_suffix
+
+    if resource_result.errors:
+        return TestEvidence(
+            name=name,
+            resource=test.resource,
+            operator=test.operator,
+            expected=test.expected,
+            actual=None,
+            status=ControlStatus.ERROR,
+            message="; ".join(resource_result.errors),
+        )
+
+    actual_value = resource_result.data
+
+    try:
+        passed, message = evaluate_matcher(test.operator, actual_value, test.expected)
+    except Exception as exc:
+        return TestEvidence(
+            name=name,
+            resource=test.resource,
+            operator=test.operator,
+            expected=test.expected,
+            actual=actual_value,
+            status=ControlStatus.ERROR,
+            message=f"Matcher execution error: {exc}",
+        )
+
+    return TestEvidence(
+        name=name,
+        resource=test.resource,
+        operator=test.operator,
+        expected=test.expected,
+        actual=actual_value,
+        status=_test_status_from_passed(passed),
+        message=message,
+    )
+
+
+def _evaluate_for_each(
+    *,
+    test: TestAssertion,
+    host: str,
+    registry: ResourceRegistry,
+    cache: ResourceCache,
+) -> list[TestEvidence]:
+    """Expand a for_each test into per-item TestEvidence entries (REQ-3.4).
+
+    If the collection resource returns an empty list, one SKIP evidence entry is
+    emitted so the control knows iteration ran but found nothing.
+    """
+    collection_params = dict(test.for_each_params)
+    collection_resource = test.for_each  # validated non-None by caller
+
+    cached = cache.get(host, collection_resource, collection_params)  # type: ignore[arg-type]
+    if cached is not None:
+        collection_result = cached
+    else:
+        collection_result = registry.query(collection_resource, collection_params)  # type: ignore[arg-type]
+        cache.set(host, collection_resource, collection_params, collection_result)  # type: ignore[arg-type]
+
+    if collection_result.errors:
+        return [
+            TestEvidence(
+                name=test.name,
+                resource=collection_resource,  # type: ignore[arg-type]
+                operator=test.operator,
+                expected=test.expected,
+                actual=None,
+                status=ControlStatus.ERROR,
+                message=f"for_each collection error: {'; '.join(collection_result.errors)}",
+            )
+        ]
+
+    items = collection_result.data
+    if not isinstance(items, list):
+        return [
+            TestEvidence(
+                name=test.name,
+                resource=collection_resource,  # type: ignore[arg-type]
+                operator=test.operator,
+                expected=test.expected,
+                actual=items,
+                status=ControlStatus.ERROR,
+                message=(
+                    f"for_each resource '{collection_resource}' must return a list,"
+                    f" got {type(items).__name__}."
+                ),
+            )
+        ]
+
+    if not items:
+        return [
+            TestEvidence(
+                name=test.name,
+                resource=test.resource,
+                operator=test.operator,
+                expected=test.expected,
+                actual=None,
+                status=ControlStatus.SKIP,
+                message="for_each collection is empty; no items to evaluate.",
+            )
+        ]
+
+    evidence: list[TestEvidence] = []
+    for i, item in enumerate(items):
+        item_params = dict(test.params)
+        item_params[test.for_each_item_key] = item
+        evidence.append(
+            _evaluate_single_test(
+                test=test,
+                params=item_params,
+                host=host,
+                registry=registry,
+                cache=cache,
+                label_suffix=f"[{i}]",
+            )
+        )
+    return evidence
 
 
 def evaluate_controls(
@@ -72,58 +212,25 @@ def evaluate_controls(
         test_evidence: list[TestEvidence] = []
 
         for test in control.tests:
-            params = dict(test.params)
-
-            cached = cache.get(host, test.resource, params)
-            if cached is not None:
-                resource_result = cached
+            if test.for_each is not None:
+                test_evidence.extend(
+                    _evaluate_for_each(
+                        test=test,
+                        host=host,
+                        registry=registry,
+                        cache=cache,
+                    )
+                )
             else:
-                resource_result = registry.query(test.resource, params)
-                cache.set(host, test.resource, params, resource_result)
-
-            if resource_result.errors:
                 test_evidence.append(
-                    TestEvidence(
-                        name=test.name,
-                        resource=test.resource,
-                        operator=test.operator,
-                        expected=test.expected,
-                        actual=None,
-                        status=ControlStatus.ERROR,
-                        message="; ".join(resource_result.errors),
+                    _evaluate_single_test(
+                        test=test,
+                        params=dict(test.params),
+                        host=host,
+                        registry=registry,
+                        cache=cache,
                     )
                 )
-                continue
-
-            actual_value = resource_result.data
-
-            try:
-                passed, message = evaluate_matcher(test.operator, actual_value, test.expected)
-            except Exception as exc:  # Defensive safety boundary for malformed matcher inputs.
-                test_evidence.append(
-                    TestEvidence(
-                        name=test.name,
-                        resource=test.resource,
-                        operator=test.operator,
-                        expected=test.expected,
-                        actual=actual_value,
-                        status=ControlStatus.ERROR,
-                        message=f"Matcher execution error: {exc}",
-                    )
-                )
-                continue
-
-            test_evidence.append(
-                TestEvidence(
-                    name=test.name,
-                    resource=test.resource,
-                    operator=test.operator,
-                    expected=test.expected,
-                    actual=actual_value,
-                    status=_test_status_from_passed(passed),
-                    message=message,
-                )
-            )
 
         control_results.append(aggregate(control.id, test_evidence))
 

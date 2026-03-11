@@ -101,6 +101,13 @@ class TestAssertion(BaseModel):
     expected: Any = None
     # Optional resource-specific parameters forwarded to the resource handler.
     params: dict[str, Any] = Field(default_factory=dict)
+    # Optional iteration over a collection resource (REQ-3.4).
+    # If set, the resource named here must return a list; the test runs once
+    # per item with the item bound to the key specified by ``for_each_item_key``
+    # in the params dict forwarded to the primary resource.
+    for_each: str | None = None
+    for_each_params: dict[str, Any] = Field(default_factory=dict)
+    for_each_item_key: str = "item"
 
     @field_validator("operator")
     @classmethod

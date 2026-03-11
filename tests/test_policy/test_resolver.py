@@ -159,3 +159,169 @@ class TestPolicyResolver:
         resolved = resolver.restore_from_lockfile(lockfile_path)
         assert "test-policy" in resolved
         assert resolved["test-policy"].checksum == "abc123"
+
+
+class TestPolicyResolverOverlays:
+    """REQ-1.5: overlay dependency wiring through PolicyResolver."""
+
+    def _make_profile_dir(
+        self,
+        root: Path,
+        name: str,
+        *,
+        version: str = "1.0.0",
+        depends: str = "",
+    ) -> Path:
+        d = root / name
+        d.mkdir(parents=True, exist_ok=True)
+        parts = [
+            f"name: {name}",
+            f"title: {name} Title",
+            f"version: {version}",
+        ]
+        if depends:
+            parts.append(depends.rstrip())
+        (d / "profile.yml").write_text("\n".join(parts) + "\n", encoding="utf-8")
+        return d
+
+    def _make_controls(self, dir_: Path, controls: list[dict[str, str]]) -> None:
+        """Write each control as its own YAML file under dir_/controls/."""
+        controls_dir = dir_ / "controls"
+        controls_dir.mkdir(exist_ok=True)
+        for ctrl in controls:
+            lines = [f"{k}: {v}" for k, v in ctrl.items()]
+            (controls_dir / f"{ctrl['id']}.yml").write_text(
+                "\n".join(lines) + "\n", encoding="utf-8"
+            )
+
+    def test_no_overlays_returns_base(self, tmp_path: Path) -> None:
+        profile_dir = self._make_profile_dir(tmp_path, "base")
+        self._make_controls(
+            profile_dir,
+            [{"id": "ctrl-1", "title": "Control One", "impact": "0.5"}],
+        )
+
+        resolver = PolicyResolver(tmp_path)
+        profile, controls = resolver.resolve_with_overlays(profile_dir)
+
+        assert profile.name == "base"
+        assert any(c.id == "ctrl-1" for c in controls)
+
+    def test_overlay_replaces_control(self, tmp_path: Path) -> None:
+        # Overlay that replaces ctrl-1 with a higher-impact version
+        overlay_dir = self._make_profile_dir(tmp_path, "overlay")
+        self._make_controls(
+            overlay_dir,
+            [{"id": "ctrl-1", "title": "Control One (Overlay)", "impact": "0.9"}],
+        )
+
+        depends_yaml = textwrap.dedent(f"""\
+            depends:
+              - name: overlay
+                url: {overlay_dir}
+                overlay: true
+        """)
+        profile_dir = self._make_profile_dir(tmp_path, "base", depends=depends_yaml)
+        self._make_controls(
+            profile_dir,
+            [
+                {"id": "ctrl-1", "title": "Control One", "impact": "0.5"},
+                {"id": "ctrl-2", "title": "Control Two", "impact": "0.3"},
+            ],
+        )
+
+        resolver = PolicyResolver(tmp_path)
+        profile, controls = resolver.resolve_with_overlays(profile_dir)
+
+        ctrl_1 = next(c for c in controls if c.id == "ctrl-1")
+        assert ctrl_1.impact == 0.9
+        assert ctrl_1.title == "Control One (Overlay)"
+        assert any(c.id == "ctrl-2" for c in controls)
+
+    def test_overlay_adds_new_control(self, tmp_path: Path) -> None:
+        overlay_dir = self._make_profile_dir(tmp_path, "overlay")
+        self._make_controls(
+            overlay_dir,
+            [{"id": "ctrl-new", "title": "Extra Control", "impact": "0.3"}],
+        )
+
+        depends_yaml = textwrap.dedent(f"""\
+            depends:
+              - name: overlay
+                url: {overlay_dir}
+                overlay: true
+        """)
+        profile_dir = self._make_profile_dir(tmp_path, "base", depends=depends_yaml)
+        self._make_controls(
+            profile_dir,
+            [{"id": "ctrl-1", "title": "Control One", "impact": "0.5"}],
+        )
+
+        resolver = PolicyResolver(tmp_path)
+        profile, controls = resolver.resolve_with_overlays(profile_dir)
+
+        ids = {c.id for c in controls}
+        assert "ctrl-1" in ids
+        assert "ctrl-new" in ids
+
+    def test_circular_overlay_raises_value_error(self, tmp_path: Path) -> None:
+        # a → b as overlay, b → a as overlay (circular)
+        a_dir = tmp_path / "a"
+        b_dir = tmp_path / "b"
+        a_dir.mkdir()
+        b_dir.mkdir()
+
+        (a_dir / "profile.yml").write_text(
+            "\n".join(
+                [
+                    "name: a",
+                    "title: A",
+                    "version: 1.0.0",
+                    "depends:",
+                    "  - name: b",
+                    f"    url: {b_dir}",
+                    "    overlay: true",
+                ]
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        (b_dir / "profile.yml").write_text(
+            "\n".join(
+                [
+                    "name: b",
+                    "title: B",
+                    "version: 1.0.0",
+                    "depends:",
+                    "  - name: a",
+                    f"    url: {a_dir}",
+                    "    overlay: true",
+                ]
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        resolver = PolicyResolver(tmp_path)
+        with pytest.raises(ValueError, match="Circular overlay dependency"):
+            resolver.resolve_with_overlays(a_dir)
+
+    def test_non_overlay_depend_is_ignored(self, tmp_path: Path) -> None:
+        """Non-overlay deps in `depends` should not be resolved here (REQ-1.4 scope)."""
+        dep_dir = self._make_profile_dir(tmp_path, "dep")
+        depends_yaml = textwrap.dedent(f"""\
+            depends:
+              - name: dep
+                url: {dep_dir}
+                overlay: false
+        """)
+        profile_dir = self._make_profile_dir(tmp_path, "base", depends=depends_yaml)
+        self._make_controls(
+            profile_dir,
+            [{"id": "ctrl-1", "title": "Control One", "impact": "0.5"}],
+        )
+
+        resolver = PolicyResolver(tmp_path)
+        # Should not raise, should not try to load dep_dir
+        profile, controls = resolver.resolve_with_overlays(profile_dir)
+        assert profile.name == "base"

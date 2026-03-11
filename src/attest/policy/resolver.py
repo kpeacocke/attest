@@ -7,7 +7,9 @@ from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from typing import Any
 
-from attest.policy.loader import load_profile
+from attest.policy.loader import load_profile, load_profile_bundle
+from attest.policy.overlay import OverlayResolver
+from attest.policy.schemas import Control, Profile
 
 
 @dataclass
@@ -106,14 +108,16 @@ class PolicyResolver:
         self.root_dir = Path(root_dir)
         self.resolved: dict[str, ResolvedDependency] = {}
         self.lockfile = Lockfile()
+        self._overlay_resolver = OverlayResolver()
 
     def resolve(self, profile_dir: Path | str) -> dict[str, ResolvedDependency]:
         """
-        Resolve a profile and its dependencies.
+        Resolve a profile and its overlay dependencies.
 
-        For now, returns just the profile itself since dependency imports are not yet fully
-        modelled in the schema. In future, this will walk the dependency tree and resolve
-        all transitive dependencies.
+        Walks the dependency tree declared in the profile's `depends` list.
+        Overlay dependencies (where `overlay: true`) are applied in declaration
+        order per REQ-1.5 (last-in-chain wins).
+        Raises ValueError on circular dependency chains.
         """
         profile_path = Path(profile_dir)
         if not profile_path.exists():
@@ -129,6 +133,53 @@ class PolicyResolver:
         self.resolved[profile.name] = dep
 
         return self.resolved
+
+    def resolve_with_overlays(
+        self,
+        profile_dir: Path | str,
+        *,
+        visited: frozenset[str] | None = None,
+    ) -> tuple[Profile, list[Control]]:
+        """
+        Resolve a profile directory and apply any declared overlay dependencies.
+
+        Returns the merged (profile, controls) after all overlays have been applied.
+        Raises ValueError for circular overlay chains (REQ-1.5).
+
+        Overlay paths in `depends` are resolved relative to `root_dir`.
+        """
+        visited = visited or frozenset()
+        profile_path = Path(profile_dir)
+        if not profile_path.exists():
+            raise FileNotFoundError(f"Profile directory not found: {profile_path}")
+
+        base_profile, base_controls = load_profile_bundle(profile_path)
+
+        if base_profile.name in visited:
+            chain = " -> ".join(sorted(visited)) + f" -> {base_profile.name}"
+            raise ValueError(
+                f"Circular overlay dependency detected: {chain}. "
+                "Overlay chains must not reference themselves."
+            )
+
+        new_visited = visited | {base_profile.name}
+
+        # Collect overlay dependencies in declaration order (REQ-1.5: last wins).
+        overlays: list[tuple[Profile, list[Control]]] = []
+        for dep in base_profile.depends:
+            if not dep.overlay:
+                continue
+            # Paths are relative to root_dir when given as names, or absolute.
+            dep_path = Path(dep.url) if dep.url else self.root_dir / dep.name
+            overlay_profile, overlay_controls = self.resolve_with_overlays(
+                dep_path, visited=new_visited
+            )
+            overlays.append((overlay_profile, overlay_controls))
+
+        if not overlays:
+            return base_profile, base_controls
+
+        return self._overlay_resolver.apply_overlays(base_profile, base_controls, overlays)
 
     def lock(self, profile_dir: Path | str, lockfile_path: Path | str) -> None:
         """Resolve and write a lockfile for a profile directory."""
