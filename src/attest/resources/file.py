@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 from typing import Any
 
@@ -30,6 +31,20 @@ class FileResource:
                 stat = path.stat()
                 data["size"] = stat.st_size
                 data["mode"] = oct(stat.st_mode & 0o777)
+
+                # Hash computation if requested
+                hash_algo = params.get("hash_algorithm")
+                if hash_algo:
+                    hash_value = self._compute_hash(path, hash_algo)
+                    if hash_value:
+                        data["hash"] = hash_value
+                        data["hash_algorithm"] = hash_algo
+
+                        # Compare against provided hash if given
+                        expected_hash = params.get("expected_hash")
+                        if isinstance(expected_hash, str):
+                            data["hash_match"] = hash_value.lower() == expected_hash.lower()
+
             field = params.get("field")
             if isinstance(field, str):
                 return ResourceResult(data=data.get(field), errors=[], timings={})
@@ -38,3 +53,22 @@ class FileResource:
             return ResourceResult(
                 data=None, errors=[f"File query failed for '{raw_path}': {exc}"], timings={}
             )
+
+    def _compute_hash(self, path: Path, algorithm: str) -> str | None:
+        """Compute file hash using the specified algorithm."""
+        algo_lower = algorithm.lower()
+        if algo_lower not in {"md5", "sha256", "sha512"}:
+            return None
+
+        try:
+            hasher = hashlib.new(algo_lower)
+        except ValueError:
+            return None
+
+        try:
+            with open(path, "rb") as f:
+                while chunk := f.read(8192):
+                    hasher.update(chunk)
+            return hasher.hexdigest()
+        except (OSError, IOError):
+            return None
