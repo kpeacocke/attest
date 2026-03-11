@@ -400,8 +400,15 @@ See [Scope for v0.1-beta](attest-overview-and-architecture.md#scope-for-v01-beta
 **Quality gates (CI):**
 
 - All tests pass: `pytest`
-- Code quality: `ruff check .`, Snyk security scans, SonarQube analysis
+- Code quality: `ruff check .`, Pylance-clean changed code, Snyk security scans, SonarQube analysis
 - Documentation is updated if behaviour changes
+
+**Contributor automation:**
+
+- Shared Copilot workspace guidance lives in `.github/copilot-instructions.md`
+- File-scoped instructions live in `.github/instructions/`
+- Task-specific custom agents live in `.github/agents/`
+- These files must follow, and when necessary be updated alongside, the architecture and requirements documents
 
 ---
 

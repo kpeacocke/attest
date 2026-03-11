@@ -3,32 +3,145 @@ name: CI
 on:
   push:
   pull_request:
+  schedule:
+    - cron: "17 3 * * 1"
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  PYTHON_VERSION: "3.14"
+  POETRY_VERSION: "1.8.4"
 
 jobs:
   python:
+    name: Ruff and pytest
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.14"
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: poetry
+
       - name: Install Poetry
         run: |
           python -m pip install --upgrade pip
-          pip install poetry
-      - name: Install deps
-        run: poetry install
+          pip install "poetry==${POETRY_VERSION}"
+
+      - name: Install dependencies
+        run: poetry install --no-interaction
+
       - name: Lint
         run: poetry run ruff check .
+
       - name: Test
-        run: poetry run pytest -q
-      # TODO: Add Snyk security scanning
-      # - name: Snyk security scan
-      #   run: |
-      #     # Configure and run Snyk scan
-      #     # snyk test --all-projects
-      # TODO: Add SonarQube code quality analysis
-      # - name: SonarQube scan
-      #   run: |
-      #     # Configure and run SonarQube analysis
-      #     # sonar-scanner
+        run: poetry run pytest -q --cov=attest --cov-report=xml:coverage.xml
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-coverage
+          path: coverage.xml
+          if-no-files-found: error
+
+  assurance:
+    name: Snyk and SonarQube
+    runs-on: ubuntu-latest
+    needs: python
+    env:
+      SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+      SNYK_ORG: ${{ vars.SNYK_ORG }}
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      SONAR_PROJECT_KEY: ${{ vars.SONAR_PROJECT_KEY }}
+      SONAR_ORGANIZATION: ${{ vars.SONAR_ORGANIZATION }}
+      SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Note skipped assurance job
+        if: ${{ env.SNYK_TOKEN == '' && (env.SONAR_TOKEN == '' || env.SONAR_PROJECT_KEY == '') }}
+        run: echo "No Snyk or SonarQube configuration is present; skipping assurance scans."
+
+      - name: Download coverage report
+        if: ${{ env.SONAR_TOKEN != '' && env.SONAR_PROJECT_KEY != '' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: python-coverage
+          path: .
+
+      - uses: actions/setup-node@v4
+        if: ${{ env.SNYK_TOKEN != '' || (env.SONAR_TOKEN != '' && env.SONAR_PROJECT_KEY != '') }}
+        with:
+          node-version: "20"
+
+      - uses: actions/setup-java@v4
+        if: ${{ env.SNYK_TOKEN != '' || (env.SONAR_TOKEN != '' && env.SONAR_PROJECT_KEY != '') }}
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install scanning tools
+        if: ${{ env.SNYK_TOKEN != '' || (env.SONAR_TOKEN != '' && env.SONAR_PROJECT_KEY != '') }}
+        run: npm install --global snyk sonar-scanner
+
+      - name: Snyk open source scan
+        if: ${{ env.SNYK_TOKEN != '' }}
+        run: |
+          args=(test --all-projects --detection-depth=4)
+          if [ -n "$SNYK_ORG" ]; then
+            args+=(--org="$SNYK_ORG")
+          fi
+          snyk "${args[@]}"
+
+      - name: Snyk code scan
+        if: ${{ env.SNYK_TOKEN != '' }}
+        run: |
+          args=(code test)
+          if [ -n "$SNYK_ORG" ]; then
+            args+=(--org="$SNYK_ORG")
+          fi
+          snyk "${args[@]}"
+
+      - name: Note skipped Snyk scans
+        if: ${{ env.SNYK_TOKEN == '' }}
+        run: echo "SNYK_TOKEN is not configured; skipping Snyk scans."
+
+      - name: SonarQube scan
+        if: ${{ env.SONAR_TOKEN != '' && env.SONAR_PROJECT_KEY != '' }}
+        run: |
+          host_url="$SONAR_HOST_URL"
+          if [ -z "$host_url" ] && [ -n "$SONAR_ORGANIZATION" ]; then
+            host_url="https://sonarcloud.io"
+          fi
+
+          if [ -z "$host_url" ]; then
+            echo "SONAR_HOST_URL is required for SonarQube Server, or SONAR_ORGANIZATION must be set for SonarCloud."
+            exit 1
+          fi
+
+          args=(
+            -Dsonar.projectKey="$SONAR_PROJECT_KEY"
+            -Dsonar.sources=src
+            -Dsonar.tests=tests
+            -Dsonar.python.version="$PYTHON_VERSION"
+            -Dsonar.python.coverage.reportPaths=coverage.xml
+            -Dsonar.qualitygate.wait=true
+          )
+
+          if [ -n "$SONAR_ORGANIZATION" ]; then
+            args+=( -Dsonar.organization="$SONAR_ORGANIZATION" )
+          fi
+
+          sonar-scanner -Dsonar.host.url="$host_url" "${args[@]}"
+
+      - name: Note skipped SonarQube scan
+        if: ${{ env.SONAR_TOKEN == '' || env.SONAR_PROJECT_KEY == '' }}
+        run: echo "SONAR_TOKEN or SONAR_PROJECT_KEY is not configured; skipping SonarQube scan."

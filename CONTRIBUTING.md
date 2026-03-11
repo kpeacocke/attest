@@ -70,6 +70,18 @@ All PRs must pass:
 - **Documentation** — Updated if behaviour changes
 
 CI runs these automatically. If something fails, we'll help you fix it.
+The Python job also publishes a coverage report for SonarQube ingestion.
+
+Repository CI expects these credentials or variables for full assurance coverage:
+
+- `SNYK_TOKEN` secret
+- `SNYK_ORG` variable (optional)
+- `SONAR_TOKEN` secret
+- `SONAR_PROJECT_KEY` variable
+- `SONAR_HOST_URL` variable for SonarQube Server, or `SONAR_ORGANIZATION` for SonarCloud
+
+When those values are not configured, CI still enforces Ruff and pytest and reports the assurance scans as skipped.
+The CI workflow also runs on a weekly schedule to catch drift in dependencies and scanner findings.
 
 ## Where to find help
 
@@ -91,14 +103,28 @@ Common tasks:
 
 ```bash
 # Run all checks locally (before pushing)
-poetry run pytest && poetry run ruff check .
+poetry run pytest --cov=attest --cov-report=xml:coverage.xml && poetry run ruff check .
 
 # Run specific test
 poetry run pytest tests/test_smoke.py::test_version_exits_zero
 
+# Generate coverage XML for SonarQube-compatible local review
+poetry run pytest --cov=attest --cov-report=xml:coverage.xml
+
 # Format code (if supported)
 poetry run ruff check . --fix
 ```
+
+### Copilot and agent workflow
+
+Shared AI guidance for this repository lives under `.github/`:
+
+- `.github/copilot-instructions.md` for project-wide rules
+- `.github/instructions/` for file-scoped guidance
+- `.github/agents/` for task-specific custom agents
+
+These files are expected to reinforce, not replace, the architecture and requirements documents.
+If you change project structure, quality gates, or contributor workflow, update the relevant customisation files in the same pull request.
 
 ### VS Code tooling troubleshooting
 
