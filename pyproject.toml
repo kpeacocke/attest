@@ -10,11 +10,14 @@ packages = [{ include = "attest", from = "src" }]
 [tool.poetry.dependencies]
 python = "^3.14"
 pydantic = "^2.8.2"
+pyyaml = "^6.0.3"
+packaging = "^26.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3.2"
 pytest-cov = "^6.1.1"
 ruff = "^0.6.9"
+types-pyyaml = "^6.0.12.20250915"
 
 [tool.poetry.scripts]
 attest = "attest.cli:main"
