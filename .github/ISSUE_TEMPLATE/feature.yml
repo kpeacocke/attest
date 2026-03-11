@@ -1,0 +1,39 @@
+name: Feature
+description: A new capability for Attest
+title: "[Feature]: "
+labels: ["type:feature"]
+body:
+  - type: input
+    id: requirement
+    attributes:
+      label: Requirement ID
+      description: e.g. REQ-4.1
+      placeholder: REQ-?.?
+    validations:
+      required: true
+
+  - type: input
+    id: design
+    attributes:
+      label: Design link
+      description: Repo-relative link to a design anchor
+      placeholder: docs/design/attest-overview-and-architecture.md#section-anchor
+    validations:
+      required: true
+
+  - type: textarea
+    id: story
+    attributes:
+      label: Problem / user story
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      placeholder: |
+        - [ ] ...
+        - [ ] ...
+    validations:
+      required: true

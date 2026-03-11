@@ -1,0 +1,25 @@
+{
+  "name": "attest-dev",
+  "image": "mcr.microsoft.com/devcontainers/python:1-3.14-bookworm",
+  "postCreateCommand": "pip install --upgrade pip && pip install poetry && poetry install",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "charliermarsh.ruff",
+        "snyk-security.snyk-vulnerability-scanner",
+        "SonarSource.sonarlint-vscode"
+      ],
+      "settings": {
+        "python.defaultInterpreterPath": "/usr/local/bin/python",
+        "python.analysis.typeCheckingMode": "basic",
+        "editor.formatOnSave": true,
+        "editor.codeActionsOnSave": {
+          "source.fixAll": "explicit"
+        }
+      }
+    }
+  },
+  "remoteUser": "vscode"
+}

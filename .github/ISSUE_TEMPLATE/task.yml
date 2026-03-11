@@ -1,0 +1,20 @@
+name: Task
+description: Maintenance, documentation, or refactor work
+title: "[Task]: "
+labels: ["type:chore"]
+body:
+  - type: textarea
+    id: work
+    attributes:
+      label: Work description
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      placeholder: |
+        - [ ] ...
+    validations:
+      required: true

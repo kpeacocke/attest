@@ -1,0 +1,29 @@
+[tool.poetry]
+name = "attest"
+version = "0.1.0"
+description = "Ansible-native compliance-as-code framework (early bootstrap)."
+authors = ["Kristian Peacocke <krpeacocke@gmail.com>"]
+license = "MIT"
+readme = "README.md"
+packages = [{ include = "attest", from = "src" }]
+
+[tool.poetry.dependencies]
+python = "^3.14"
+pydantic = "^2.8.2"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.3.2"
+ruff = "^0.6.9"
+
+[tool.poetry.scripts]
+attest = "attest.cli:main"
+
+[tool.ruff]
+line-length = 100
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[build-system]
+requires = ["poetry-core>=1.9.0"]
+build-backend = "poetry.core.masonry.api"
