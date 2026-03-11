@@ -82,7 +82,7 @@ jobs:
         with:
           node-version: "20"
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         if: ${{ env.SNYK_TOKEN != '' || (env.SONAR_TOKEN != '' && env.SONAR_PROJECT_KEY != '') }}
         with:
           distribution: temurin
