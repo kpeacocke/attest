@@ -80,20 +80,17 @@ def _cmd_validate(args: argparse.Namespace) -> int:
 
 
 def _cmd_run(args: argparse.Namespace) -> int:
-    """Run a profile against the local host (REQ-7.1, REQ-7.2).
-
-    This is a bootstrap implementation: resources are not yet gathered from
-    a live system. The engine evaluates controls against an empty fact set,
-    which means resource-dependent tests produce ERROR status.
-    """
+    """Run a profile against the local host (REQ-7.1, REQ-7.2)."""
     from pydantic import ValidationError
 
+    from attest.engine.evaluator import evaluate_controls
     from attest.policy.loader import LoadError, load_profile_bundle
     from attest.policy.validator import validate_bundle
     from attest.report.canonical import build_report, write_report
     from attest.report.junit import write_junit
     from attest.report.markdown import write_markdown
     from attest.report.summary import build_summary, write_summary
+    from attest.resources.builtin import build_builtin_registry
 
     profile_dir = Path(args.profile_dir)
     out_dir = Path(args.out)
@@ -115,35 +112,15 @@ def _cmd_run(args: argparse.Namespace) -> int:
             print(f"  - {err}", file=sys.stderr)
         return 4
 
-    from attest.engine.result import ControlResult, ControlStatus, TestEvidence
-
-    results: list[ControlResult] = []
-    for ctrl in controls:
-        evidence = [
-            TestEvidence(
-                name=test.name,
-                resource=test.resource,
-                operator=test.operator,
-                expected=test.expected,
-                actual=None,
-                status=ControlStatus.ERROR,
-                message=(
-                    "Resource collection is not implemented in this bootstrap build. "
-                    "Install an Attest resource collection to gather facts."
-                ),
-            )
-            for test in ctrl.tests
-        ]
-        results.append(
-            ControlResult(
-                control_id=ctrl.id,
-                status=ControlStatus.ERROR if evidence else ControlStatus.SKIP,
-                tests=evidence,
-                skip_reason="" if evidence else "No tests defined.",
-            )
-        )
+    registry = build_builtin_registry()
+    results, cache_stats = evaluate_controls(
+        host=args.host,
+        controls=controls,
+        registry=registry,
+    )
 
     report = build_report(profile, controls, results, host=args.host)
+    report["resource_cache"] = cache_stats
 
     formats = set(args.formats or ["json", "summary"])
 
@@ -175,11 +152,15 @@ def _cmd_run(args: argparse.Namespace) -> int:
         print(f"Summary written: {summary_path}")
 
     print(
-        f"\nRun complete — PASS:{counts.get('PASS',0)} "
-        f"FAIL:{counts.get('FAIL',0)} "
-        f"ERROR:{counts.get('ERROR',0)} "
-        f"SKIP:{counts.get('SKIP',0)} "
-        f"WAIVED:{counts.get('WAIVED',0)}"
+        f"\nRun complete — PASS:{counts.get('PASS', 0)} "
+        f"FAIL:{counts.get('FAIL', 0)} "
+        f"ERROR:{counts.get('ERROR', 0)} "
+        f"SKIP:{counts.get('SKIP', 0)} "
+        f"WAIVED:{counts.get('WAIVED', 0)}"
+    )
+    print(
+        f"Resource cache — hits:{cache_stats.get('hits', 0)} "
+        f"misses:{cache_stats.get('misses', 0)}"
     )
     return exit_code
 
