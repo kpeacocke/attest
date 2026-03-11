@@ -129,3 +129,52 @@ def test_run_all_formats(tmp_path: Path) -> None:
 def test_diff_exits_four(capsys: pytest.CaptureFixture[str]) -> None:
     rc = main(["diff", "a.json", "b.json"])
     assert rc == 4
+
+
+def test_diff_writes_outputs_and_returns_zero(tmp_path: Path) -> None:
+    baseline = {
+        "schema_version": "1.0",
+        "run_id": "a",
+        "results": [{"control_id": "C-1", "status": "PASS"}],
+    }
+    current = {
+        "schema_version": "1.0",
+        "run_id": "b",
+        "results": [{"control_id": "C-1", "status": "PASS"}],
+    }
+
+    a_path = tmp_path / "a.json"
+    b_path = tmp_path / "b.json"
+    out_dir = tmp_path / "out"
+    import json
+
+    a_path.write_text(json.dumps(baseline), encoding="utf-8")
+    b_path.write_text(json.dumps(current), encoding="utf-8")
+
+    rc = main(["diff", str(a_path), str(b_path), "--out", str(out_dir)])
+    assert rc == 0
+    assert (out_dir / "diff.json").exists()
+    assert (out_dir / "diff.md").exists()
+
+
+def test_diff_returns_two_when_new_failures(tmp_path: Path) -> None:
+    baseline = {
+        "schema_version": "1.0",
+        "run_id": "a",
+        "results": [{"control_id": "C-1", "status": "PASS"}],
+    }
+    current = {
+        "schema_version": "1.0",
+        "run_id": "b",
+        "results": [{"control_id": "C-1", "status": "FAIL"}],
+    }
+
+    a_path = tmp_path / "a.json"
+    b_path = tmp_path / "b.json"
+    import json
+
+    a_path.write_text(json.dumps(baseline), encoding="utf-8")
+    b_path.write_text(json.dumps(current), encoding="utf-8")
+
+    rc = main(["diff", str(a_path), str(b_path), "--out", str(tmp_path / "out")])
+    assert rc == 2

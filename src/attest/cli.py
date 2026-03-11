@@ -1,4 +1,5 @@
 """Attest CLI — thin entry point; domain logic lives in submodules (REQ-7.1, REQ-7.2)."""
+
 from __future__ import annotations
 
 import argparse
@@ -82,9 +83,8 @@ def _cmd_run(args: argparse.Namespace) -> int:
     """Run a profile against the local host (REQ-7.1, REQ-7.2).
 
     This is a bootstrap implementation: resources are not yet gathered from
-    a live system.  The engine evaluates controls against an empty fact set,
-    which means resource-dependent tests produce ERROR status. This is the
-    correct bootstrap behaviour — it exercises the full pipeline end-to-end.
+    a live system. The engine evaluates controls against an empty fact set,
+    which means resource-dependent tests produce ERROR status.
     """
     from pydantic import ValidationError
 
@@ -115,7 +115,6 @@ def _cmd_run(args: argparse.Namespace) -> int:
             print(f"  - {err}", file=sys.stderr)
         return 4
 
-    # Bootstrap: no live resources yet — produce ERROR results for all controls.
     from attest.engine.result import ControlResult, ControlStatus, TestEvidence
 
     results: list[ControlResult] = []
@@ -175,7 +174,6 @@ def _cmd_run(args: argparse.Namespace) -> int:
         write_summary(build_summary(report), summary_path)
         print(f"Summary written: {summary_path}")
 
-    # Print run summary to terminal (REQ-8.1).
     print(
         f"\nRun complete — PASS:{counts.get('PASS',0)} "
         f"FAIL:{counts.get('FAIL',0)} "
@@ -187,9 +185,43 @@ def _cmd_run(args: argparse.Namespace) -> int:
 
 
 def _cmd_diff(args: argparse.Namespace) -> int:
-    """Diff two canonical JSON reports (REQ-7.1) — stub."""
-    print("'diff' is not yet implemented.", file=sys.stderr)
-    return 4
+    """Diff two canonical JSON reports (REQ-6.2, REQ-7.1)."""
+    from attest.diff.baseline import load_report
+    from attest.diff.differ import diff_reports, write_json_diff, write_markdown_diff
+
+    report_a_path = Path(args.report_a)
+    report_b_path = Path(args.report_b)
+    out_dir = Path(args.out)
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    try:
+        report_a = load_report(report_a_path)
+        report_b = load_report(report_b_path)
+    except FileNotFoundError as exc:
+        print(f"Diff input error: {exc}", file=sys.stderr)
+        return 4
+    except (ValueError, OSError) as exc:
+        print(f"Diff input error: {exc}", file=sys.stderr)
+        return 4
+    except Exception as exc:
+        print(f"Diff parse error: {exc}", file=sys.stderr)
+        return 4
+
+    diff = diff_reports(report_a, report_b)
+
+    json_path = str(out_dir / "diff.json")
+    md_path = str(out_dir / "diff.md")
+    write_json_diff(diff, json_path)
+    write_markdown_diff(diff, md_path)
+
+    print(f"Diff JSON written: {json_path}")
+    print(f"Diff Markdown written: {md_path}")
+
+    if diff.get("new_failures"):
+        return 2
+    if diff.get("new_errors"):
+        return 3
+    return 0
 
 
 def main(argv: list[str] | None = None) -> int:
