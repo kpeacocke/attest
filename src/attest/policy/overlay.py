@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-
 from attest.policy.schemas import Control, Profile
 
 
@@ -27,8 +26,12 @@ class OverlayResolver:
         # Merge profile metadata
         merged_profile = self._merge_profiles(base_profile, overlay_profile)
 
-        # Merge controls by ID
-        merged_controls = self._merge_controls(base_controls, overlay_controls)
+        # Merge controls by ID, recording provenance from the overlay profile name.
+        merged_controls = self._merge_controls(
+            base_controls,
+            overlay_controls,
+            overlay_source=overlay_profile.name,
+        )
 
         return merged_profile, merged_controls
 
@@ -64,22 +67,39 @@ class OverlayResolver:
 
         return Profile(**merged_data)
 
-    def _merge_controls(self, base: list[Control], overlay: list[Control]) -> list[Control]:
+    def _merge_controls(
+        self,
+        base: list[Control],
+        overlay: list[Control],
+        overlay_source: str = "",
+    ) -> list[Control]:
         """
         Merge controls by ID.
 
         Overlay control replaces base control with same ID.
         Base controls without overlay remain.
         Overlay controls without base are appended.
+
+        When an overlay replaces a base control, overlay_source and
+        original_impact are recorded on the merged control (REQ-1.5, REQ-4.1).
         """
         base_by_id = {ctrl.id: ctrl for ctrl in base}
         overlay_by_id = {ctrl.id: ctrl for ctrl in overlay}
 
         # Start with all base controls, replacing IDs present in overlay
-        merged = []
+        merged: list[Control] = []
         for ctrl_id, ctrl in base_by_id.items():
             if ctrl_id in overlay_by_id:
-                merged.append(overlay_by_id[ctrl_id])
+                overlay_ctrl = overlay_by_id[ctrl_id]
+                patched = overlay_ctrl.model_copy(
+                    update={
+                        "overlay_source": overlay_source
+                        or overlay_ctrl.source.origin
+                        or "overlay",
+                        "original_impact": ctrl.impact,
+                    }
+                )
+                merged.append(patched)
             else:
                 merged.append(ctrl)
 

@@ -232,6 +232,11 @@ def evaluate_controls(
                     )
                 )
 
-        control_results.append(aggregate(control.id, test_evidence))
+        ctrl_result = aggregate(control.id, test_evidence)
+        # Copy overlay provenance from control to result (REQ-4.1).
+        if control.overlay_source is not None:
+            ctrl_result.overlay_source = control.overlay_source
+            ctrl_result.original_impact = control.original_impact
+        control_results.append(ctrl_result)
 
     return control_results, {"hits": cache.stats.hits, "misses": cache.stats.misses}

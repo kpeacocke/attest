@@ -8,11 +8,13 @@ from __future__ import annotations
 
 import json
 import uuid
+from collections.abc import Iterable
 from datetime import datetime, timezone
 from typing import Any
 
 from attest.engine.result import ControlResult, ControlStatus
 from attest.policy.schemas import Control, Profile
+from attest.redaction import Redactor
 
 SCHEMA_VERSION = "1.0"
 
@@ -56,21 +58,49 @@ def _tag_summaries(
     }
 
 
-def _evidence_entry(e: Any) -> dict[str, Any]:
+def _evidence_entry(e: Any, redactor: Redactor) -> dict[str, Any]:
+    actual = redactor.redact(e.actual)
+    message = redactor.redact(e.message) if isinstance(e.message, str) else e.message
     return {
         "name": e.name,
         "resource": e.resource,
         "operator": e.operator,
         "expected": e.expected,
-        "actual": e.actual,
+        "actual": actual,
         "status": e.status.value,
-        "message": e.message,
+        "message": message,
     }
+
+
+def _truncate_value(value: Any, max_string_length: int) -> Any:
+    """Truncate strings recursively for deterministic bounded evidence output."""
+    if max_string_length <= 0:
+        return value
+
+    if isinstance(value, str):
+        if len(value) <= max_string_length:
+            return value
+        return value[:max_string_length] + "...[TRUNCATED]"
+
+    if isinstance(value, dict):
+        return {k: _truncate_value(v, max_string_length) for k, v in value.items()}
+
+    if isinstance(value, list):
+        return [_truncate_value(item, max_string_length) for item in value]
+
+    if isinstance(value, tuple):
+        return tuple(_truncate_value(item, max_string_length) for item in value)
+
+    return value
 
 
 def _control_entry(
     result: ControlResult,
     ctrl: Control | None,
+    redactor: Redactor,
+    summary_only_resources: set[str],
+    summary_only_tests: set[str],
+    max_string_length: int,
 ) -> dict[str, Any]:
     entry: dict[str, Any] = {
         "control_id": result.control_id,
@@ -93,7 +123,21 @@ def _control_entry(
         entry["overlay_source"] = result.overlay_source
     if result.original_impact is not None:
         entry["original_impact"] = result.original_impact
-    entry["tests"] = [_evidence_entry(e) for e in result.tests]
+    tests: list[dict[str, Any]] = []
+    for evidence in result.tests:
+        evidence_entry = _evidence_entry(evidence, redactor)
+        if evidence.resource in summary_only_resources or evidence.name in summary_only_tests:
+            evidence_entry["actual"] = "[SUMMARY_ONLY]"
+            evidence_entry["message"] = "Evidence omitted in summary-only mode."
+        else:
+            evidence_entry["actual"] = _truncate_value(
+                evidence_entry.get("actual"), max_string_length
+            )
+            evidence_entry["message"] = _truncate_value(
+                evidence_entry.get("message"), max_string_length
+            )
+        tests.append(evidence_entry)
+    entry["tests"] = tests
     return entry
 
 
@@ -104,11 +148,20 @@ def build_report(
     *,
     run_id: str | None = None,
     host: str = "localhost",
+    redactor: Redactor | None = None,
+    max_string_length: int = 4096,
+    summary_only_resources: Iterable[str] | None = None,
+    summary_only_tests: Iterable[str] | None = None,
 ) -> dict[str, Any]:
     """Build the canonical JSON report dict.
 
     Results and controls are sorted by control ID for deterministic output (REQ-7.4).
+    Evidence is redacted by default using the built-in Redactor (REQ-4.3).
+    Pass ``redactor=Redactor([])`` to disable redaction.
     """
+    redactor = redactor if redactor is not None else Redactor()
+    summary_only_resources_set = set(summary_only_resources or [])
+    summary_only_tests_set = set(summary_only_tests or [])
     run_id = run_id or str(uuid.uuid4())
     timestamp = datetime.now(tz=timezone.utc).isoformat()
 
@@ -142,7 +195,17 @@ def build_report(
             "risk_score": round(risk_score, 4),
         },
         "tag_summaries": _tag_summaries(controls_by_id, sorted_results),
-        "results": [_control_entry(r, controls_by_id.get(r.control_id)) for r in sorted_results],
+        "results": [
+            _control_entry(
+                r,
+                controls_by_id.get(r.control_id),
+                redactor,
+                summary_only_resources_set,
+                summary_only_tests_set,
+                max_string_length,
+            )
+            for r in sorted_results
+        ],
     }
 
 

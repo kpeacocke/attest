@@ -349,3 +349,73 @@ class TestOverlayResolver:
         merged = resolver._merge_controls(base_controls, overlay_controls)
         assert len(merged) == 1
         assert merged[0].title == "Overlay C1"
+
+    def test_merge_controls_records_overlay_source(self) -> None:
+        """When an overlay replaces a control, overlay_source is recorded (REQ-4.1)."""
+        resolver = OverlayResolver()
+
+        base_controls = [Control(id="C1", title="Base C1", impact=0.3)]
+        overlay_controls = [Control(id="C1", title="Overlay C1", impact=0.7)]
+
+        merged = resolver._merge_controls(
+            base_controls, overlay_controls, overlay_source="my-overlay"
+        )
+        assert len(merged) == 1
+        assert merged[0].overlay_source == "my-overlay"
+
+    def test_merge_controls_records_original_impact(self) -> None:
+        """When an overlay changes impact, the original value is preserved (REQ-4.1)."""
+        resolver = OverlayResolver()
+
+        base_controls = [Control(id="C1", title="Base C1", impact=0.3)]
+        overlay_controls = [Control(id="C1", title="Overlay C1", impact=0.9)]
+
+        merged = resolver._merge_controls(
+            base_controls, overlay_controls, overlay_source="hardening"
+        )
+        assert merged[0].impact == 0.9
+        assert merged[0].original_impact == 0.3
+
+    def test_new_overlay_controls_have_no_overlay_source(self) -> None:
+        """Controls added by overlay (not in base) should not have overlay_source set."""
+        resolver = OverlayResolver()
+
+        merged = resolver._merge_controls([], [Control(id="NEW", title="New")], overlay_source="ov")
+        assert merged[0].overlay_source is None
+
+    def test_resolve_overlay_records_overlay_profile_name(
+        self,
+        resolver: OverlayResolver,
+        simple_base_profile: Profile,
+        simple_base_controls: list[Control],
+        overlay_profile: Profile,
+        overlay_controls: list[Control],
+    ) -> None:
+        """resolve_overlay should record the overlay profile name as overlay_source (REQ-4.1)."""
+        _, merged = resolver.resolve_overlay(
+            simple_base_profile,
+            simple_base_controls,
+            overlay_profile,
+            overlay_controls,
+        )
+        c1 = next(c for c in merged if c.id == "C1")
+        assert c1.overlay_source == "overlay"  # overlay_profile.name
+
+    def test_apply_overlays_last_overlay_sets_source(
+        self,
+        resolver: OverlayResolver,
+        simple_base_profile: Profile,
+        simple_base_controls: list[Control],
+    ) -> None:
+        """With multiple overlays, the last overlay's name should be in overlay_source."""
+        ov1 = Profile(name="overlay-a", title="A", version="1.0")
+        ov2 = Profile(name="overlay-b", title="B", version="1.0")
+        ctrl = Control(id="C1", title="Modified")
+
+        _, merged = resolver.apply_overlays(
+            simple_base_profile,
+            simple_base_controls,
+            [(ov1, [ctrl]), (ov2, [ctrl])],
+        )
+        c1 = next(c for c in merged if c.id == "C1")
+        assert c1.overlay_source == "overlay-b"

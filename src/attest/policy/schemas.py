@@ -149,6 +149,10 @@ class Control(BaseModel):
     skip_if: str | None = None
     tests: list[TestAssertion] = Field(default_factory=list)
     source: ControlSource = Field(default_factory=ControlSource)
+    # Overlay provenance fields (REQ-1.5, REQ-4.1) — populated by OverlayResolver at
+    # resolution time; not declared in profile YAML.
+    overlay_source: str | None = Field(default=None, exclude=True)
+    original_impact: float | None = Field(default=None, exclude=True)
 
     @field_validator("tests")
     @classmethod

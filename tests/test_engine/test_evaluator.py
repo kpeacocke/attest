@@ -367,3 +367,80 @@ class TestForEachEvaluator:
 
         assert results[0].status == ControlStatus.ERROR
         assert "must return a list" in results[0].tests[0].message
+
+
+class TestOverlayProvenanceInEvaluator:
+    """REQ-4.1: overlay provenance is propagated from Control to ControlResult."""
+
+    def _static_registry(self) -> object:
+        from attest.resources.interfaces import ResourceRegistry, ResourceResult
+
+        class _OsHandler:
+            def query(self, params: dict) -> ResourceResult:
+                return ResourceResult(data={"system": "Linux"}, errors=[], timings={})
+
+        class _PassHandler:
+            def query(self, params: dict) -> ResourceResult:
+                return ResourceResult(data=True, errors=[], timings={})
+
+        registry = ResourceRegistry()
+        registry.register("os_facts", _OsHandler())
+        registry.register("file", _PassHandler())
+        return registry
+
+    def test_overlay_source_propagated_to_result(self) -> None:
+        from attest.policy import schemas as ps
+
+        ctrl = Control(
+            id="OV-001",
+            title="Overlaid control",
+            tests=[ps.TestAssertion(name="t", resource="file", operator="exists", expected=None)],
+        )
+        ctrl.overlay_source = "hardening-overlay"
+        ctrl.original_impact = 0.3
+
+        results, _ = evaluate_controls(
+            host="localhost",
+            controls=[ctrl],
+            registry=self._static_registry(),
+        )
+
+        assert results[0].overlay_source == "hardening-overlay"
+
+    def test_original_impact_propagated_to_result(self) -> None:
+        from attest.policy import schemas as ps
+
+        ctrl = Control(
+            id="OV-002",
+            title="Overlaid control",
+            impact=0.9,
+            tests=[ps.TestAssertion(name="t", resource="file", operator="exists", expected=None)],
+        )
+        ctrl.overlay_source = "cis-overlay"
+        ctrl.original_impact = 0.5
+
+        results, _ = evaluate_controls(
+            host="localhost",
+            controls=[ctrl],
+            registry=self._static_registry(),
+        )
+
+        assert results[0].original_impact == 0.5
+
+    def test_no_overlay_source_leaves_fields_none(self) -> None:
+        from attest.policy import schemas as ps
+
+        ctrl = Control(
+            id="BASE-001",
+            title="Base control",
+            tests=[ps.TestAssertion(name="t", resource="file", operator="exists", expected=None)],
+        )
+
+        results, _ = evaluate_controls(
+            host="localhost",
+            controls=[ctrl],
+            registry=self._static_registry(),
+        )
+
+        assert results[0].overlay_source is None
+        assert results[0].original_impact is None

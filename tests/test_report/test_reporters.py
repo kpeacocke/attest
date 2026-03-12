@@ -80,3 +80,32 @@ class TestSummary:
         assert summary["pass_count"] == 0
         assert "risk_score" in summary
         assert "run_id" in summary
+
+
+class TestSingleRunAllReporters:
+    """REQ-4.2: all reporters can be generated from a single canonical report dict."""
+
+    def test_all_reporters_accept_same_report(self) -> None:
+        """JUnit, Markdown, and Summary all consume the same canonical dict without error."""
+        report = _base_report(ControlStatus.FAIL)
+
+        junit_xml = build_junit(report)
+        markdown_text = build_markdown(report)
+        summary_dict = build_summary(report)
+
+        assert "<testsuite" in junit_xml
+        assert "# Attest Run Report" in markdown_text
+        assert "fail_count" in summary_dict
+
+    def test_reporters_do_not_mutate_canonical_report(self) -> None:
+        """Calling reporters must not mutate the canonical report dict (REQ-7.4)."""
+        import copy
+
+        report = _base_report(ControlStatus.PASS)
+        original = copy.deepcopy(report)
+
+        build_junit(report)
+        build_markdown(report)
+        build_summary(report)
+
+        assert report == original
