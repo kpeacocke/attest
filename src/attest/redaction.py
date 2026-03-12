@@ -19,7 +19,7 @@ class RedactionPatterns:
         re.IGNORECASE,
     )
     API_KEY = re.compile(
-        r"(api[-_]?key|apikey)\s*[:=]\s*['\"]?([a-zA-Z0-9\-_]{20,})['\"]?",
+        r"api[-_]?key\s*[:=]\s*['\"]?([A-Z0-9._-]{20,})['\"]?",
         re.IGNORECASE,
     )
     AWS_KEY = re.compile(r"AKIA[0-9A-Z]{16}", re.IGNORECASE)
@@ -28,11 +28,11 @@ class RedactionPatterns:
         re.IGNORECASE,
     )
     BEARER_TOKEN = re.compile(
-        r"(bearer|authorization)\s+([a-zA-Z0-9\-_.]+)",
+        r"(bearer|authorization)\s+([A-Z0-9._-]+)",
         re.IGNORECASE,
     )
     URL_PASSWORD = re.compile(r"(https?://)[^:]+:([^@]+)@", re.IGNORECASE)
-    EMAIL = re.compile(r"\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Z|a-z]{2,}\b")
+    EMAIL = re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b")
 
     # Redaction marker
     REDACTED_MARKER = "[REDACTED]"

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from attest.engine.evaluator import evaluate_controls
 from attest.engine.result import ControlStatus
 from attest.policy import schemas as policy_schemas
@@ -425,7 +427,7 @@ class TestOverlayProvenanceInEvaluator:
             registry=self._static_registry(),
         )
 
-        assert results[0].original_impact == 0.5
+        assert results[0].original_impact == pytest.approx(0.5)
 
     def test_no_overlay_source_leaves_fields_none(self) -> None:
         from attest.policy import schemas as ps

@@ -12,6 +12,9 @@ from attest.resources.interfaces import ResourceResult
 class MountResource:
     """Query mounted filesystems with deterministic filtering by mount point or device."""
 
+    _ON_DELIMITER = " on "
+    _TYPE_DELIMITER = " type "
+
     def query(self, params: dict[str, Any]) -> ResourceResult:
         mount_point = params.get("mount_point")
         device = params.get("device")
@@ -82,17 +85,17 @@ class MountResource:
 
     def _parse_mount_line(self, line: str) -> dict[str, object] | None:
         # Format: device on mount_point type fstype (options)
-        if " on " not in line or " type " not in line:
+        if self._ON_DELIMITER not in line or self._TYPE_DELIMITER not in line:
             return None
 
-        before_on = line.split(" on ", 1)[0].strip()
-        after_on = line.split(" on ", 1)[1]
+        before_on = line.split(self._ON_DELIMITER, 1)[0].strip()
+        after_on = line.split(self._ON_DELIMITER, 1)[1]
 
-        if " type " not in after_on:
+        if self._TYPE_DELIMITER not in after_on:
             return None
 
-        mount_point = after_on.split(" type ", 1)[0].strip()
-        after_type = after_on.split(" type ", 1)[1]
+        mount_point = after_on.split(self._TYPE_DELIMITER, 1)[0].strip()
+        after_type = after_on.split(self._TYPE_DELIMITER, 1)[1]
 
         parts = after_type.split(None, 1)
         if len(parts) < 1:

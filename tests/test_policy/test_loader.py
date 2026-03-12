@@ -97,5 +97,5 @@ class TestLoadProfileBundle:
 
     def test_bundle_without_controls_dir(self, tmp_path: Path) -> None:
         _profile_dir(tmp_path, VALID_PROFILE)
-        profile, controls = load_profile_bundle(tmp_path)
+        _, controls = load_profile_bundle(tmp_path)
         assert len(controls) == 0

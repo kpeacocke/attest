@@ -12,6 +12,24 @@ from attest.resources.interfaces import ResourceResult
 class FileResource:
     """Query file existence and simple metadata for a local path."""
 
+    def _apply_optional_hash_fields(
+        self, data: dict[str, Any], params: dict[str, Any], path: Path
+    ) -> None:
+        """Attach hash fields when requested and supported."""
+        hash_algo = params.get("hash_algorithm")
+        if not hash_algo:
+            return
+
+        hash_value = self._compute_hash(path, hash_algo)
+        if not hash_value:
+            return
+
+        data["hash"] = hash_value
+        data["hash_algorithm"] = hash_algo
+        expected_hash = params.get("expected_hash")
+        if isinstance(expected_hash, str):
+            data["hash_match"] = hash_value.lower() == expected_hash.lower()
+
     def query(self, params: dict[str, Any]) -> ResourceResult:
         raw_path = params.get("path")
         if not isinstance(raw_path, str) or not raw_path:
@@ -31,19 +49,7 @@ class FileResource:
                 stat = path.stat()
                 data["size"] = stat.st_size
                 data["mode"] = oct(stat.st_mode & 0o777)
-
-                # Hash computation if requested
-                hash_algo = params.get("hash_algorithm")
-                if hash_algo:
-                    hash_value = self._compute_hash(path, hash_algo)
-                    if hash_value:
-                        data["hash"] = hash_value
-                        data["hash_algorithm"] = hash_algo
-
-                        # Compare against provided hash if given
-                        expected_hash = params.get("expected_hash")
-                        if isinstance(expected_hash, str):
-                            data["hash_match"] = hash_value.lower() == expected_hash.lower()
+                self._apply_optional_hash_fields(data, params, path)
 
             field = params.get("field")
             if isinstance(field, str):

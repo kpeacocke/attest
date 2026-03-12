@@ -90,46 +90,50 @@ class AuditdRulesResource:
         if not parts:
             return None
 
-        # Parse by looking for flag patterns
         i = 0
         while i < len(parts):
-            part = parts[i]
-
-            if part == "-w" and i + 1 < len(parts):
-                # Watch rule, next part is the path
-                entry["path"] = parts[i + 1]
-                i += 2
-            elif part == "-p" and i + 1 < len(parts):
-                # Permission flags
-                i += 2
-            elif part == "-k" and i + 1 < len(parts):
-                # Key
-                entry["key"] = parts[i + 1]
-                i += 2
-            elif part == "-S" and i + 1 < len(parts):
-                # Syscall
-                entry["syscall"] = parts[i + 1]
-                i += 2
-            elif part == "-a" and i + 1 < len(parts):
-                # Action
-                entry["action"] = parts[i + 1]
-                i += 2
-            elif part.startswith("-") and "=" in part:
-                # Handle key=value style flags
-                key, val = part.split("=", 1)
-                key_lower = key.lstrip("-").lower()
-                if key_lower == "action":
-                    entry["action"] = val
-                elif key_lower == "path":
-                    entry["path"] = val
-                elif key_lower == "syscall":
-                    entry["syscall"] = val
-                elif key_lower == "key":
-                    entry["key"] = val
-                i += 1
-            elif part.startswith("-") and "=" in parts[i] if i < len(parts) else False:
-                i += 1
-            else:
-                i += 1
+            i += self._consume_rule_part(entry, parts, i)
 
         return entry
+
+    def _consume_rule_part(
+        self,
+        entry: dict[str, object],
+        parts: list[str],
+        index: int,
+    ) -> int:
+        """Consume one or two tokens from a parsed rule and update entry."""
+        part = parts[index]
+        token_map = {
+            "-w": "path",
+            "-k": "key",
+            "-S": "syscall",
+            "-a": "action",
+        }
+
+        if part in token_map and index + 1 < len(parts):
+            entry[token_map[part]] = parts[index + 1]
+            return 2
+
+        # Permission flags are parsed but not stored; consume next value token.
+        if part == "-p" and index + 1 < len(parts):
+            return 2
+
+        if part.startswith("-") and "=" in part:
+            self._consume_kv_rule_part(entry, part)
+            return 1
+
+        return 1
+
+    def _consume_kv_rule_part(self, entry: dict[str, object], part: str) -> None:
+        """Handle --key=value style flags for selected fields."""
+        key, value = part.split("=", 1)
+        key_lower = key.lstrip("-").lower()
+        if key_lower == "action":
+            entry["action"] = value
+        elif key_lower == "path":
+            entry["path"] = value
+        elif key_lower == "syscall":
+            entry["syscall"] = value
+        elif key_lower == "key":
+            entry["key"] = value

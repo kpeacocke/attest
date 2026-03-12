@@ -1,7 +1,10 @@
 """Tests for canonical report builder (REQ-4.1, REQ-7.4)."""
+
 from __future__ import annotations
 
 import json
+
+import pytest
 
 
 from attest.engine.result import ControlResult, ControlStatus, TestEvidence
@@ -61,7 +64,7 @@ class TestBuildReport:
         ctrl = _control(impact=1.0)
         result = _result(status=ControlStatus.FAIL)
         report = build_report(_profile(), [ctrl], [result])
-        assert report["summary"]["risk_score"] == 1.0
+        assert report["summary"]["risk_score"] == pytest.approx(1.0)
 
     def test_tag_summaries_nist(self) -> None:
         report = build_report(_profile(), [_control()], [_result(status=ControlStatus.PASS)])
@@ -85,4 +88,4 @@ class TestBuildReport:
         report = build_report(_profile(), [_control()], [result])
         entry = report["results"][0]
         assert entry["overlay_source"] == "my-overlay"
-        assert entry["original_impact"] == 0.5
+        assert entry["original_impact"] == pytest.approx(0.5)

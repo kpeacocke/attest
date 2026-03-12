@@ -94,9 +94,39 @@ class CrontabResource:
                 for item in sorted(spool_path.iterdir()):
                     if item.is_file():
                         users.append(item.name)
-            except (OSError, PermissionError):
+            except OSError:
                 pass
         return users
+
+    def _iter_cron_files(self, cron_dir: Path) -> list[Path]:
+        """Return sorted regular files in a cron directory, or an empty list on errors."""
+        try:
+            return [path for path in sorted(cron_dir.glob("*")) if path.is_file()]
+        except OSError:
+            return []
+
+    def _read_cron_file_entries(self, cron_dir: Path, cron_file: Path) -> list[dict[str, object]]:
+        """Parse one cron file into deterministic entry rows."""
+        try:
+            content = cron_file.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            return []
+
+        entries: list[dict[str, object]] = []
+        for line_num, line in enumerate(content.splitlines(), 1):
+            cleaned = line.rstrip()
+            if cleaned and not cleaned.lstrip().startswith("#"):
+                entries.append(
+                    {
+                        "source": f"system:{cron_file.name}",
+                        "filename": cron_file.name,
+                        "directory": str(cron_dir),
+                        "type": "system",
+                        "line": line_num,
+                        "full_line": cleaned,
+                    }
+                )
+        return entries
 
     def _read_system_crontabs(self) -> list[dict[str, object]]:
         entries: list[dict[str, object]] = []
@@ -112,32 +142,7 @@ class CrontabResource:
             if not cron_dir.exists():
                 continue
 
-            try:
-                cron_files = sorted(cron_dir.glob("*"))
-            except (OSError, PermissionError):
-                continue
-
-            for cron_file in cron_files:
-                if not cron_file.is_file():
-                    continue
-
-                try:
-                    content = cron_file.read_text(encoding="utf-8")
-                except (OSError, UnicodeDecodeError):
-                    continue
-
-                for line_num, line in enumerate(content.splitlines(), 1):
-                    cleaned = line.rstrip()
-                    if cleaned and not cleaned.lstrip().startswith("#"):
-                        entries.append(
-                            {
-                                "source": f"system:{cron_file.name}",
-                                "filename": cron_file.name,
-                                "directory": str(cron_dir),
-                                "type": "system",
-                                "line": line_num,
-                                "full_line": cleaned,
-                            }
-                        )
+            for cron_file in self._iter_cron_files(cron_dir):
+                entries.extend(self._read_cron_file_entries(cron_dir, cron_file))
 
         return entries

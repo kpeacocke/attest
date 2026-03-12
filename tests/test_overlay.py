@@ -79,7 +79,7 @@ class TestOverlayResolver:
         overlay_controls: list[Control],
     ) -> None:
         """Overlay controls with matching IDs should replace base controls."""
-        merged_profile, merged_controls = resolver.resolve_overlay(
+        _, merged_controls = resolver.resolve_overlay(
             simple_base_profile,
             simple_base_controls,
             overlay_profile,
@@ -100,7 +100,7 @@ class TestOverlayResolver:
         overlay_controls: list[Control],
     ) -> None:
         """Base controls without overlay should remain unchanged."""
-        merged_profile, merged_controls = resolver.resolve_overlay(
+        _, merged_controls = resolver.resolve_overlay(
             simple_base_profile,
             simple_base_controls,
             overlay_profile,
@@ -121,7 +121,7 @@ class TestOverlayResolver:
         overlay_controls: list[Control],
     ) -> None:
         """Overlay controls without base match should be added."""
-        merged_profile, merged_controls = resolver.resolve_overlay(
+        _, merged_controls = resolver.resolve_overlay(
             simple_base_profile,
             simple_base_controls,
             overlay_profile,
@@ -223,7 +223,7 @@ class TestOverlayResolver:
             Control(id="C1", title="C1 Modified by Overlay 2", desc="desc"),
         ]
 
-        result_profile, result_controls = resolver.apply_overlays(
+        _, result_controls = resolver.apply_overlays(
             simple_base_profile,
             simple_base_controls,
             [
@@ -373,8 +373,8 @@ class TestOverlayResolver:
         merged = resolver._merge_controls(
             base_controls, overlay_controls, overlay_source="hardening"
         )
-        assert merged[0].impact == 0.9
-        assert merged[0].original_impact == 0.3
+        assert merged[0].impact == pytest.approx(0.9)
+        assert merged[0].original_impact == pytest.approx(0.3)
 
     def test_new_overlay_controls_have_no_overlay_source(self) -> None:
         """Controls added by overlay (not in base) should not have overlay_source set."""

@@ -231,10 +231,10 @@ class TestPolicyResolverOverlays:
         )
 
         resolver = PolicyResolver(tmp_path)
-        profile, controls = resolver.resolve_with_overlays(profile_dir)
+        _, controls = resolver.resolve_with_overlays(profile_dir)
 
         ctrl_1 = next(c for c in controls if c.id == "ctrl-1")
-        assert ctrl_1.impact == 0.9
+        assert ctrl_1.impact == pytest.approx(0.9)
         assert ctrl_1.title == "Control One (Overlay)"
         assert any(c.id == "ctrl-2" for c in controls)
 
@@ -258,7 +258,7 @@ class TestPolicyResolverOverlays:
         )
 
         resolver = PolicyResolver(tmp_path)
-        profile, controls = resolver.resolve_with_overlays(profile_dir)
+        _, controls = resolver.resolve_with_overlays(profile_dir)
 
         ids = {c.id for c in controls}
         assert "ctrl-1" in ids
@@ -323,5 +323,5 @@ class TestPolicyResolverOverlays:
 
         resolver = PolicyResolver(tmp_path)
         # Should not raise, should not try to load dep_dir
-        profile, controls = resolver.resolve_with_overlays(profile_dir)
+        profile, _ = resolver.resolve_with_overlays(profile_dir)
         assert profile.name == "base"

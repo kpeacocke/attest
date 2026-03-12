@@ -15,6 +15,54 @@ def _index_results(report: dict[str, Any]) -> dict[str, dict[str, Any]]:
     return indexed
 
 
+def _status_for(result: dict[str, Any] | None) -> str:
+    return str(result.get("status")) if result else "ABSENT"
+
+
+def _waiver_for(result: dict[str, Any] | None) -> str:
+    return str(result.get("waiver_id", "")) if result else ""
+
+
+def _append_status_change(
+    status_changes: list[dict[str, str]], control_id: str, old_status: str, new_status: str
+) -> None:
+    if old_status != new_status:
+        status_changes.append({"control_id": control_id, "from": old_status, "to": new_status})
+
+
+def _append_new_status_buckets(
+    control_id: str,
+    old_status: str,
+    new_status: str,
+    *,
+    new_failures: list[str],
+    new_passes: list[str],
+    new_skips: list[str],
+    new_errors: list[str],
+) -> None:
+    if new_status == "FAIL" and old_status != "FAIL":
+        new_failures.append(control_id)
+    if new_status == "PASS" and old_status != "PASS":
+        new_passes.append(control_id)
+    if new_status == "SKIP" and old_status != "SKIP":
+        new_skips.append(control_id)
+    if new_status == "ERROR" and old_status != "ERROR":
+        new_errors.append(control_id)
+
+
+def _append_waiver_change(
+    waiver_changes: list[dict[str, str]], control_id: str, old_waiver: str, new_waiver: str
+) -> None:
+    if old_waiver != new_waiver:
+        waiver_changes.append(
+            {
+                "control_id": control_id,
+                "from": old_waiver or "none",
+                "to": new_waiver or "none",
+            }
+        )
+
+
 def diff_reports(report_a: dict[str, Any], report_b: dict[str, Any]) -> dict[str, Any]:
     """Compute deterministic diff between two canonical reports."""
     a_index = _index_results(report_a)
@@ -33,31 +81,25 @@ def diff_reports(report_a: dict[str, Any], report_b: dict[str, Any]) -> dict[str
         old = a_index.get(control_id)
         new = b_index.get(control_id)
 
-        old_status = str(old.get("status")) if old else "ABSENT"
-        new_status = str(new.get("status")) if new else "ABSENT"
+        old_status = _status_for(old)
+        new_status = _status_for(new)
+        _append_status_change(status_changes, control_id, old_status, new_status)
+        _append_new_status_buckets(
+            control_id,
+            old_status,
+            new_status,
+            new_failures=new_failures,
+            new_passes=new_passes,
+            new_skips=new_skips,
+            new_errors=new_errors,
+        )
 
-        if old_status != new_status:
-            status_changes.append({"control_id": control_id, "from": old_status, "to": new_status})
-
-        if new_status == "FAIL" and old_status != "FAIL":
-            new_failures.append(control_id)
-        if new_status == "PASS" and old_status != "PASS":
-            new_passes.append(control_id)
-        if new_status == "SKIP" and old_status != "SKIP":
-            new_skips.append(control_id)
-        if new_status == "ERROR" and old_status != "ERROR":
-            new_errors.append(control_id)
-
-        old_waiver = str(old.get("waiver_id", "")) if old else ""
-        new_waiver = str(new.get("waiver_id", "")) if new else ""
-        if old_waiver != new_waiver:
-            waiver_changes.append(
-                {
-                    "control_id": control_id,
-                    "from": old_waiver or "none",
-                    "to": new_waiver or "none",
-                }
-            )
+        _append_waiver_change(
+            waiver_changes,
+            control_id,
+            _waiver_for(old),
+            _waiver_for(new),
+        )
 
     return {
         "schema_version": "1.0",

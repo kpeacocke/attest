@@ -26,53 +26,62 @@ class _SafeEvaluator:
         tree = ast.parse(expression, mode="eval")
         return self._eval_node(tree.body)
 
+    def _eval_name(self, node: ast.Name) -> Any:
+        if node.id not in self.variables:
+            raise ValueError(f"Unknown predicate variable '{node.id}'.")
+        return self.variables[node.id]
+
+    def _eval_bool_op(self, node: ast.BoolOp) -> bool:
+        values = [bool(self._eval_node(v)) for v in node.values]
+        if isinstance(node.op, ast.And):
+            return all(values)
+        if isinstance(node.op, ast.Or):
+            return any(values)
+        raise ValueError("Unsupported boolean operator in predicate.")
+
+    def _compare_values(self, left: Any, op: ast.cmpop, right: Any) -> bool:
+        if isinstance(op, ast.Eq):
+            return left == right
+        if isinstance(op, ast.NotEq):
+            return left != right
+        if isinstance(op, ast.Lt):
+            return left < right
+        if isinstance(op, ast.LtE):
+            return left <= right
+        if isinstance(op, ast.Gt):
+            return left > right
+        if isinstance(op, ast.GtE):
+            return left >= right
+        if isinstance(op, ast.In):
+            return left in right
+        if isinstance(op, ast.NotIn):
+            return left not in right
+        raise ValueError("Unsupported comparison operator in predicate.")
+
+    def _eval_compare(self, node: ast.Compare) -> bool:
+        left = self._eval_node(node.left)
+        for op, comparator in zip(node.ops, node.comparators, strict=False):
+            right = self._eval_node(comparator)
+            if not self._compare_values(left, op, right):
+                return False
+            left = right
+        return True
+
     def _eval_node(self, node: ast.AST) -> Any:
         if isinstance(node, ast.Constant):
             return node.value
 
         if isinstance(node, ast.Name):
-            if node.id not in self.variables:
-                raise ValueError(f"Unknown predicate variable '{node.id}'.")
-            return self.variables[node.id]
+            return self._eval_name(node)
 
         if isinstance(node, ast.BoolOp):
-            values = [bool(self._eval_node(v)) for v in node.values]
-            if isinstance(node.op, ast.And):
-                return all(values)
-            if isinstance(node.op, ast.Or):
-                return any(values)
-            raise ValueError("Unsupported boolean operator in predicate.")
+            return self._eval_bool_op(node)
 
         if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.Not):
             return not bool(self._eval_node(node.operand))
 
         if isinstance(node, ast.Compare):
-            left = self._eval_node(node.left)
-            for op, comparator in zip(node.ops, node.comparators, strict=False):
-                right = self._eval_node(comparator)
-                if isinstance(op, ast.Eq):
-                    ok = left == right
-                elif isinstance(op, ast.NotEq):
-                    ok = left != right
-                elif isinstance(op, ast.Lt):
-                    ok = left < right
-                elif isinstance(op, ast.LtE):
-                    ok = left <= right
-                elif isinstance(op, ast.Gt):
-                    ok = left > right
-                elif isinstance(op, ast.GtE):
-                    ok = left >= right
-                elif isinstance(op, ast.In):
-                    ok = left in right
-                elif isinstance(op, ast.NotIn):
-                    ok = left not in right
-                else:
-                    raise ValueError("Unsupported comparison operator in predicate.")
-
-                if not ok:
-                    return False
-                left = right
-            return True
+            return self._eval_compare(node)
 
         raise ValueError("Unsupported syntax in predicate expression.")
 

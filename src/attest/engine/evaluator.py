@@ -155,6 +155,80 @@ def _evaluate_for_each(
     return evidence
 
 
+def _build_os_context(
+    *,
+    host: str,
+    registry: ResourceRegistry,
+    cache: ResourceCache,
+) -> dict[str, object]:
+    """Build a deterministic applicability context from host label + os_facts."""
+    os_context: dict[str, object] = {"host": host}
+    os_cached = cache.get(host, "os_facts", {})
+    if os_cached is not None:
+        os_result = os_cached
+    else:
+        os_result = registry.query("os_facts", {})
+        cache.set(host, "os_facts", {}, os_result)
+
+    if isinstance(os_result.data, dict):
+        for key, value in sorted(os_result.data.items(), key=lambda item: item[0]):
+            os_context[str(key)] = value
+
+    return os_context
+
+
+def _result_from_applicability(control: Control, decision: object) -> ControlResult | None:
+    """Return terminal result for ERROR/SKIP applicability decisions."""
+    if getattr(decision, "error", ""):
+        return ControlResult(
+            control_id=control.id,
+            status=ControlStatus.ERROR,
+            tests=[],
+            skip_reason=getattr(decision, "error", ""),
+        )
+    if not getattr(decision, "applicable", True):
+        return ControlResult(
+            control_id=control.id,
+            status=ControlStatus.SKIP,
+            tests=[],
+            skip_reason=getattr(decision, "reason", ""),
+        )
+    return None
+
+
+def _evaluate_control_tests(
+    *,
+    control: Control,
+    host: str,
+    registry: ResourceRegistry,
+    cache: ResourceCache,
+) -> list[TestEvidence]:
+    """Evaluate all tests in one control and return evidence entries."""
+    evidence: list[TestEvidence] = []
+    for test in control.tests:
+        if test.for_each is not None:
+            evidence.extend(
+                _evaluate_for_each(
+                    test=test,
+                    host=host,
+                    registry=registry,
+                    cache=cache,
+                )
+            )
+            continue
+
+        evidence.append(
+            _evaluate_single_test(
+                test=test,
+                params=dict(test.params),
+                host=host,
+                registry=registry,
+                cache=cache,
+            )
+        )
+    return evidence
+
+
 def evaluate_controls(
     *,
     host: str,
@@ -168,19 +242,7 @@ def evaluate_controls(
     """
     cache = cache or ResourceCache()
     control_results: list[ControlResult] = []
-
-    # Build a deterministic predicate context from host label + os_facts.
-    os_context: dict[str, object] = {"host": host}
-    os_cached = cache.get(host, "os_facts", {})
-    if os_cached is not None:
-        os_result = os_cached
-    else:
-        os_result = registry.query("os_facts", {})
-        cache.set(host, "os_facts", {}, os_result)
-
-    if isinstance(os_result.data, dict):
-        for key, value in sorted(os_result.data.items(), key=lambda item: item[0]):
-            os_context[str(key)] = value
+    os_context = _build_os_context(host=host, registry=registry, cache=cache)
 
     for control in sorted(controls, key=lambda c: c.id):
         decision = evaluate_applicability(
@@ -188,49 +250,17 @@ def evaluate_controls(
             skip_if=control.skip_if,
             variables=os_context,
         )
-        if decision.error:
-            control_results.append(
-                ControlResult(
-                    control_id=control.id,
-                    status=ControlStatus.ERROR,
-                    tests=[],
-                    skip_reason=decision.error,
-                )
-            )
-            continue
-        if not decision.applicable:
-            control_results.append(
-                ControlResult(
-                    control_id=control.id,
-                    status=ControlStatus.SKIP,
-                    tests=[],
-                    skip_reason=decision.reason,
-                )
-            )
+        terminal = _result_from_applicability(control, decision)
+        if terminal is not None:
+            control_results.append(terminal)
             continue
 
-        test_evidence: list[TestEvidence] = []
-
-        for test in control.tests:
-            if test.for_each is not None:
-                test_evidence.extend(
-                    _evaluate_for_each(
-                        test=test,
-                        host=host,
-                        registry=registry,
-                        cache=cache,
-                    )
-                )
-            else:
-                test_evidence.append(
-                    _evaluate_single_test(
-                        test=test,
-                        params=dict(test.params),
-                        host=host,
-                        registry=registry,
-                        cache=cache,
-                    )
-                )
+        test_evidence = _evaluate_control_tests(
+            control=control,
+            host=host,
+            registry=registry,
+            cache=cache,
+        )
 
         ctrl_result = aggregate(control.id, test_evidence)
         # Copy overlay provenance from control to result (REQ-4.1).

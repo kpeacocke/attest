@@ -92,7 +92,7 @@ class KernelModuleResource:
                     if line.startswith("blacklist "):
                         module_name = line.split(None, 1)[1].strip()
                         blacklist.add(module_name)
-            except (FileNotFoundError, IOError, OSError, IndexError):
+            except (OSError, IndexError):
                 pass
 
         return blacklist
