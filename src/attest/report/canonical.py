@@ -119,6 +119,10 @@ def _control_entry(
         entry["skip_reason"] = result.skip_reason
     if result.waiver_id:
         entry["waiver_id"] = result.waiver_id
+    if result.waiver is not None:
+        entry["waiver"] = result.waiver
+    if result.waiver_expired:
+        entry["waiver_expired"] = True
     if result.overlay_source:
         entry["overlay_source"] = result.overlay_source
     if result.original_impact is not None:

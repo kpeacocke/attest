@@ -133,6 +133,57 @@ def test_run_all_formats(tmp_path: Path) -> None:
     assert (out_dir / "attest-summary.json").exists()
 
 
+def test_run_applies_waivers_from_profile_dir(tmp_path: Path) -> None:
+    failing_control_yaml = """
+        id: LH-001
+        title: OS fact mismatch
+        tests:
+          - name: check system fact
+            resource: os_facts
+            operator: eq
+            expected: definitely-not-linux
+            params:
+              field: system
+    """
+    profile_dir = _make_profile_dir(
+        tmp_path,
+        VALID_PROFILE_YAML,
+        {"lh001.yml": failing_control_yaml},
+    )
+    (profile_dir / "waivers.yml").write_text(
+        textwrap.dedent(
+            """
+            waivers:
+              - id: W-001
+                control_id: LH-001
+                justification: Accepted beta exception
+                owner: platform
+                expiry: 2099-01-01
+            """
+        ),
+        encoding="utf-8",
+    )
+
+    out_dir = tmp_path / "out"
+    rc = main(["run", str(profile_dir), "--out", str(out_dir)])
+
+    report = json.loads((out_dir / "report.json").read_text(encoding="utf-8"))
+    assert rc == 0
+    assert report["results"][0]["status"] == "WAIVED"
+    assert report["results"][0]["waiver_id"] == "W-001"
+
+
+def test_run_invalid_waiver_file_exits_four(tmp_path: Path) -> None:
+    profile_dir = _make_profile_dir(
+        tmp_path, VALID_PROFILE_YAML, {"os001.yml": PASSING_CONTROL_YAML}
+    )
+    waiver_path = tmp_path / "waivers.yml"
+    waiver_path.write_text("waivers: not-a-list\n", encoding="utf-8")
+
+    rc = main(["run", str(profile_dir), "--waivers", str(waiver_path)])
+    assert rc == 4
+
+
 def test_diff_exits_four_for_missing_files() -> None:
     rc = main(["diff", "a.json", "b.json"])
     assert rc == 4

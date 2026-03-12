@@ -89,3 +89,35 @@ class TestBuildReport:
         entry = report["results"][0]
         assert entry["overlay_source"] == "my-overlay"
         assert entry["original_impact"] == pytest.approx(0.5)
+
+    def test_waiver_metadata_in_result(self) -> None:
+        result = ControlResult(
+            control_id="LH-001",
+            status=ControlStatus.WAIVED,
+            tests=[],
+            waiver_id="W-001",
+            waiver={
+                "id": "W-001",
+                "control_ids": ["LH-001"],
+                "justification": "Accepted risk",
+                "owner": "platform",
+                "expiry": "2099-01-01",
+                "reference": None,
+                "scope": "",
+            },
+        )
+        report = build_report(_profile(), [_control()], [result])
+        entry = report["results"][0]
+        assert entry["waiver_id"] == "W-001"
+        assert entry["waiver"]["justification"] == "Accepted risk"
+
+    def test_expired_waiver_flag_in_result(self) -> None:
+        result = ControlResult(
+            control_id="LH-001",
+            status=ControlStatus.FAIL,
+            tests=[],
+            waiver_id="W-009",
+            waiver_expired=True,
+        )
+        report = build_report(_profile(), [_control()], [result])
+        assert report["results"][0]["waiver_expired"] is True

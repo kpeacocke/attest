@@ -40,6 +40,7 @@ def apply_waivers(
                     status=ControlStatus.WAIVED,
                     tests=result.tests,
                     waiver_id=best.id,
+                    waiver=best.to_report_dict(),
                     overlay_source=result.overlay_source,
                     original_impact=result.original_impact,
                 )
@@ -51,6 +52,9 @@ def apply_waivers(
                     status=ControlStatus.FAIL,
                     tests=result.tests,
                     skip_reason=f"waiver expired (waiver id: {best_expired.id})",
+                    waiver_id=best_expired.id,
+                    waiver=best_expired.to_report_dict(),
+                    waiver_expired=True,
                     overlay_source=result.overlay_source,
                     original_impact=result.original_impact,
                 )

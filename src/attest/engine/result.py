@@ -41,6 +41,8 @@ class ControlResult:
     tests: list[TestEvidence] = field(default_factory=list)
     skip_reason: str = ""
     waiver_id: str | None = None
+    waiver: dict[str, Any] | None = None
+    waiver_expired: bool = False
 
     # Overlay provenance fields (REQ-4.1) — set when the control was modified.
     overlay_source: str | None = None

@@ -32,6 +32,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Host label to embed in the report (default: localhost).",
     )
     r.add_argument(
+        "--waivers",
+        default=None,
+        help="Optional path to a waiver YAML file. Defaults to waivers.yml in the profile directory when present.",
+    )
+    r.add_argument(
         "--format",
         dest="formats",
         action="append",
@@ -78,6 +83,56 @@ def _cmd_validate(args: argparse.Namespace) -> int:
     return 4
 
 
+def _load_optional_waivers(
+    args: argparse.Namespace, profile_dir: Path
+) -> tuple[list[object], int | None]:
+    """Load waivers when requested or when profile_dir/waivers.yml exists."""
+    from attest.waivers.schema import load_waivers
+
+    waiver_path = Path(args.waivers) if args.waivers else profile_dir / "waivers.yml"
+    if not waiver_path.exists():
+        return [], None
+
+    try:
+        return load_waivers(waiver_path), None
+    except Exception as exc:
+        print(f"Waiver load error: {exc}", file=sys.stderr)
+        return [], 4
+
+
+def _write_run_reports(
+    *,
+    report: dict[str, object],
+    out_dir: Path,
+    formats: set[str],
+) -> None:
+    """Emit all requested run artefacts from one canonical report."""
+    from attest.report.canonical import write_report
+    from attest.report.junit import write_junit
+    from attest.report.markdown import write_markdown
+    from attest.report.summary import build_summary, write_summary
+
+    if "json" in formats:
+        json_path = str(out_dir / "report.json")
+        write_report(report, json_path)
+        print(f"Report written: {json_path}")
+
+    if "junit" in formats:
+        junit_path = str(out_dir / "report.xml")
+        write_junit(report, junit_path)
+        print(f"JUnit report written: {junit_path}")
+
+    if "markdown" in formats:
+        md_path = str(out_dir / "report.md")
+        write_markdown(report, md_path)
+        print(f"Markdown report written: {md_path}")
+
+    if "summary" in formats:
+        summary_path = str(out_dir / "attest-summary.json")
+        write_summary(build_summary(report), summary_path)
+        print(f"Summary written: {summary_path}")
+
+
 def _cmd_run(args: argparse.Namespace) -> int:
     """Run a profile against the local host (REQ-7.1, REQ-7.2)."""
     from pydantic import ValidationError
@@ -85,11 +140,9 @@ def _cmd_run(args: argparse.Namespace) -> int:
     from attest.engine.evaluator import evaluate_controls
     from attest.policy.loader import LoadError, load_profile_bundle
     from attest.policy.validator import validate_bundle
-    from attest.report.canonical import build_report, write_report
-    from attest.report.junit import write_junit
-    from attest.report.markdown import write_markdown
-    from attest.report.summary import build_summary, write_summary
+    from attest.report.canonical import build_report
     from attest.resources.builtin import build_builtin_registry
+    from attest.waivers.applier import apply_waivers
 
     profile_dir = Path(args.profile_dir)
     out_dir = Path(args.out)
@@ -118,6 +171,12 @@ def _cmd_run(args: argparse.Namespace) -> int:
         registry=registry,
     )
 
+    waivers, waiver_error = _load_optional_waivers(args, profile_dir)
+    if waiver_error is not None:
+        return waiver_error
+    if waivers:
+        results = apply_waivers(results, waivers)
+
     report = build_report(profile, controls, results, host=args.host)
     report["resource_cache"] = cache_stats
 
@@ -130,25 +189,7 @@ def _cmd_run(args: argparse.Namespace) -> int:
     elif counts.get("ERROR", 0):
         exit_code = 3
 
-    if "json" in formats:
-        json_path = str(out_dir / "report.json")
-        write_report(report, json_path)
-        print(f"Report written: {json_path}")
-
-    if "junit" in formats:
-        junit_path = str(out_dir / "report.xml")
-        write_junit(report, junit_path)
-        print(f"JUnit report written: {junit_path}")
-
-    if "markdown" in formats:
-        md_path = str(out_dir / "report.md")
-        write_markdown(report, md_path)
-        print(f"Markdown report written: {md_path}")
-
-    if "summary" in formats:
-        summary_path = str(out_dir / "attest-summary.json")
-        write_summary(build_summary(report), summary_path)
-        print(f"Summary written: {summary_path}")
+    _write_run_reports(report=report, out_dir=out_dir, formats=formats)
 
     print(
         f"\nRun complete — PASS:{counts.get('PASS', 0)} "

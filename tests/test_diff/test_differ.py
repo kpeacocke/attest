@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from attest.diff.baseline import load_report, save_baseline
+from attest.diff.baseline import load_baseline, load_report, resolve_baseline_path, save_baseline
 from attest.diff.differ import build_markdown_diff, diff_reports
 
 
@@ -69,3 +69,17 @@ class TestBaselineStore:
         loaded = load_report(path)
         assert loaded["run_id"] == "run-1"
         assert loaded["results"][0]["control_id"] == "C-1"
+
+    def test_baseline_is_addressable_by_name(self, tmp_path: Path) -> None:
+        report = _report("run-1", {"C-1": "PASS"})
+        save_baseline(report, tmp_path, name="stable")
+
+        path = resolve_baseline_path(tmp_path, "stable")
+        assert path.name == "stable.json"
+
+    def test_baseline_is_addressable_by_run_id(self, tmp_path: Path) -> None:
+        report = _report("run-42", {"C-1": "PASS"})
+        save_baseline(report, tmp_path, name="named-baseline")
+
+        loaded = load_baseline(tmp_path, "run-42")
+        assert loaded["run_id"] == "run-42"
