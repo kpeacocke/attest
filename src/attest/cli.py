@@ -1,10 +1,14 @@
-"""Attest CLI — thin entry point; domain logic lives in submodules (REQ-7.1, REQ-7.2)."""
+"""Attest CLI - thin entry point; domain logic lives in submodules (REQ-7.1, REQ-7.2)."""
 
 from __future__ import annotations
 
 import argparse
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from attest.waivers.schema import Waiver
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -27,9 +31,18 @@ def build_parser() -> argparse.ArgumentParser:
         help="Output directory for reports (default: current directory).",
     )
     r.add_argument(
+        "-i",
+        "--inventory",
+        default=None,
+        help=(
+            "Target host or comma-separated host list (default: localhost). "
+            "Full inventory file support is post-beta."
+        ),
+    )
+    r.add_argument(
         "--host",
         default="localhost",
-        help="Host label to embed in the report (default: localhost).",
+        help="Host label to embed in the report (overridden by --inventory when both are set).",
     )
     r.add_argument(
         "--waivers",
@@ -72,9 +85,7 @@ def _cmd_validate(args: argparse.Namespace) -> int:
 
     result = validate_bundle(profile, controls)
     if result.valid:
-        print(
-            f"Profile '{profile.name}' v{profile.version} is valid " f"({len(controls)} controls)."
-        )
+        print(f"Profile '{profile.name}' v{profile.version} is valid ({len(controls)} controls).")
         return 0
 
     print(f"Validation failed ({len(result.errors)} error(s)):", file=sys.stderr)
@@ -85,7 +96,7 @@ def _cmd_validate(args: argparse.Namespace) -> int:
 
 def _load_optional_waivers(
     args: argparse.Namespace, profile_dir: Path
-) -> tuple[list[object], int | None]:
+) -> tuple[list[Waiver], int | None]:
     """Load waivers when requested or when profile_dir/waivers.yml exists."""
     from attest.waivers.schema import load_waivers
 
@@ -100,9 +111,61 @@ def _load_optional_waivers(
         return [], 4
 
 
+def _split_failures(
+    results: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Split FAIL results into non-expired and expired-waiver buckets."""
+    failures = [r for r in results if r.get("status") == "FAIL"]
+    expired = [r for r in failures if r.get("waiver_expired")]
+    real_fails = [r for r in failures if not r.get("waiver_expired")]
+    return real_fails, expired
+
+
+def _print_failure_details(real_fails: list[dict[str, Any]], host: str) -> None:
+    """Print actionable FAIL evidence for quick operator triage."""
+    if not real_fails:
+        return
+    print(f"\nFailures on {host}:")
+    for ctrl in real_fails:
+        impact = ctrl.get("impact", "?")
+        print(f"  [{ctrl['control_id']}] {ctrl.get('title', '')} (impact={impact})")
+        for test in ctrl.get("tests", []):
+            if test.get("status") == "FAIL":
+                print(
+                    f"    - {test.get('name')}: "
+                    f"expected={test.get('expected')!r} "
+                    f"got={test.get('actual')!r}"
+                )
+                if test.get("message"):
+                    print(f"      {test['message']}")
+
+
+def _print_expired_waiver_details(expired: list[dict[str, Any]], host: str) -> None:
+    """Print expired waiver controls as policy breaches."""
+    if not expired:
+        return
+    print(f"\nExpired waivers on {host} (policy breach - treat as FAIL):")
+    for ctrl in expired:
+        print(
+            f"  [{ctrl['control_id']}] {ctrl.get('title', '')} "
+            f"(waiver: {ctrl.get('waiver_id', '?')})"
+        )
+
+
+def _print_actionable_failures(report: dict[str, Any], host: str) -> None:
+    """Print per-failure detail for terminal-first operator triage (REQ-8.1)."""
+    results = report.get("results")
+    if not isinstance(results, list):
+        return
+    typed_results = [r for r in results if isinstance(r, dict)]
+    real_fails, expired = _split_failures(typed_results)
+    _print_failure_details(real_fails, host)
+    _print_expired_waiver_details(expired, host)
+
+
 def _write_run_reports(
     *,
-    report: dict[str, object],
+    report: dict[str, Any],
     out_dir: Path,
     formats: set[str],
 ) -> None:
@@ -148,6 +211,9 @@ def _cmd_run(args: argparse.Namespace) -> int:
     out_dir = Path(args.out)
     out_dir.mkdir(parents=True, exist_ok=True)
 
+    # REQ-7.1: --inventory takes precedence over --host when both are set.
+    host = args.inventory.split(",")[0].strip() if args.inventory else args.host
+
     try:
         profile, controls = load_profile_bundle(profile_dir)
     except LoadError as exc:
@@ -166,7 +232,7 @@ def _cmd_run(args: argparse.Namespace) -> int:
 
     registry = build_builtin_registry()
     results, cache_stats = evaluate_controls(
-        host=args.host,
+        host=host,
         controls=controls,
         registry=registry,
     )
@@ -177,7 +243,7 @@ def _cmd_run(args: argparse.Namespace) -> int:
     if waivers:
         results = apply_waivers(results, waivers)
 
-    report = build_report(profile, controls, results, host=args.host)
+    report = build_report(profile, controls, results, host=host)
     report["resource_cache"] = cache_stats
 
     formats = set(args.formats or ["json", "summary"])
@@ -190,16 +256,17 @@ def _cmd_run(args: argparse.Namespace) -> int:
         exit_code = 3
 
     _write_run_reports(report=report, out_dir=out_dir, formats=formats)
+    _print_actionable_failures(report, host)
 
     print(
-        f"\nRun complete — PASS:{counts.get('PASS', 0)} "
+        f"\nRun complete - PASS:{counts.get('PASS', 0)} "
         f"FAIL:{counts.get('FAIL', 0)} "
         f"ERROR:{counts.get('ERROR', 0)} "
         f"SKIP:{counts.get('SKIP', 0)} "
         f"WAIVED:{counts.get('WAIVED', 0)}"
     )
     print(
-        f"Resource cache — hits:{cache_stats.get('hits', 0)} "
+        f"Resource cache - hits:{cache_stats.get('hits', 0)} "
         f"misses:{cache_stats.get('misses', 0)}"
     )
     return exit_code

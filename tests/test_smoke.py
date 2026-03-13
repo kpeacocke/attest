@@ -1,4 +1,4 @@
-"""Smoke tests and CLI exit code tests (REQ-7.2, REQ-7.3)."""
+"""Smoke tests and CLI exit code tests (REQ-7.1, REQ-7.2, REQ-7.3, REQ-8.1)."""
 
 from __future__ import annotations
 
@@ -228,3 +228,124 @@ def test_diff_returns_two_when_new_failures(tmp_path: Path) -> None:
     b_path.write_text(json.dumps(current), encoding="utf-8")
     rc = main(["diff", str(a_path), str(b_path), "--out", str(tmp_path / "out")])
     assert rc == 2
+
+
+# ---------------------------------------------------------------------------
+# REQ-7.1: --inventory / -i flag
+# ---------------------------------------------------------------------------
+
+
+def test_run_inventory_flag_sets_host_label(tmp_path: Path) -> None:
+    """REQ-7.1: -i/--inventory accepted; first entry used as host label in report."""
+    profile_dir = _make_profile_dir(
+        tmp_path, VALID_PROFILE_YAML, {"os001.yml": PASSING_CONTROL_YAML}
+    )
+    out_dir = tmp_path / "out"
+    rc = main(["run", str(profile_dir), "--out", str(out_dir), "-i", "myhost"])
+    assert rc == 0
+    report = json.loads((out_dir / "report.json").read_text(encoding="utf-8"))
+    assert report["host"] == "myhost"
+
+
+def test_run_inventory_list_uses_first_host(tmp_path: Path) -> None:
+    """REQ-7.1: comma-separated inventory uses the first entry as the run host."""
+    profile_dir = _make_profile_dir(
+        tmp_path, VALID_PROFILE_YAML, {"os001.yml": PASSING_CONTROL_YAML}
+    )
+    out_dir = tmp_path / "out"
+    rc = main(["run", str(profile_dir), "--out", str(out_dir), "--inventory", "alpha,beta,gamma"])
+    assert rc == 0
+    report = json.loads((out_dir / "report.json").read_text(encoding="utf-8"))
+    assert report["host"] == "alpha"
+
+
+# ---------------------------------------------------------------------------
+# REQ-7.2: additional exit code scenarios
+# ---------------------------------------------------------------------------
+
+
+def test_run_exits_zero_for_waived_only(tmp_path: Path) -> None:
+    """REQ-7.2: a run where all failures are waived exits 0 (WAIVED allowed)."""
+    failing_control_yaml = """
+        id: LH-002
+        title: Waived failing control
+        tests:
+          - name: check system fact (fail)
+            resource: os_facts
+            operator: eq
+            expected: definitely-not-linux
+            params:
+              field: system
+    """
+    profile_dir = _make_profile_dir(
+        tmp_path,
+        VALID_PROFILE_YAML,
+        {"lh002.yml": failing_control_yaml},
+    )
+    (profile_dir / "waivers.yml").write_text(
+        textwrap.dedent(
+            """
+            waivers:
+              - id: W-002
+                control_id: LH-002
+                justification: Accepted for testing
+                owner: platform
+                expiry: 2099-01-01
+            """
+        ),
+        encoding="utf-8",
+    )
+    out_dir = tmp_path / "out"
+    rc = main(["run", str(profile_dir), "--out", str(out_dir)])
+    assert rc == 0
+
+
+def test_run_exits_two_for_fail(tmp_path: Path) -> None:
+    """REQ-7.2: any FAIL present -> exit 2."""
+    failing_control_yaml = """
+        id: LH-003
+        title: Always fails
+        tests:
+          - name: impossible check
+            resource: os_facts
+            operator: eq
+            expected: not-linux
+            params:
+              field: system
+    """
+    profile_dir = _make_profile_dir(
+        tmp_path, VALID_PROFILE_YAML, {"lh003.yml": failing_control_yaml}
+    )
+    rc = main(["run", str(profile_dir), "--out", str(tmp_path / "out")])
+    assert rc == 2
+
+
+# ---------------------------------------------------------------------------
+# REQ-8.1: actionable terminal output on failures
+# ---------------------------------------------------------------------------
+
+
+def test_run_prints_failure_details_to_stdout(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """REQ-8.1: terminal output includes control id and values on failure."""
+    failing_control_yaml = """
+        id: LH-004
+        title: Always fails
+        tests:
+          - name: impossible check
+            resource: os_facts
+            operator: eq
+            expected: not-linux
+            params:
+              field: system
+    """
+    profile_dir = _make_profile_dir(
+        tmp_path, VALID_PROFILE_YAML, {"lh004.yml": failing_control_yaml}
+    )
+    main(["run", str(profile_dir), "--out", str(tmp_path / "out")])
+    out = capsys.readouterr().out
+    # Control id must appear in the terminal output for operator triage.
+    assert "LH-004" in out
+    # Expected value should appear for quick diagnosis.
+    assert "not-linux" in out

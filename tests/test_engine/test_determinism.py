@@ -56,7 +56,7 @@ def _profile() -> Profile:
 
 
 class TestEvaluationDeterminism:
-    """REQ-3.3: identical inputs → identical evaluation outcomes."""
+    """REQ-3.3: identical inputs -> identical evaluation outcomes."""
 
     def test_same_inputs_produce_same_control_order(self) -> None:
         registry = _static_registry("file")
@@ -145,3 +145,38 @@ class TestCanonicalReportDeterminism:
         local_report["timestamp"] = job_report["timestamp"] = "NORMALISED"
 
         assert json.dumps(local_report, sort_keys=True) == json.dumps(job_report, sort_keys=True)
+
+
+class TestOutputKeyOrderDeterminism:
+    """REQ-7.4: output keys and collections are in a stable, documented order."""
+
+    def test_canonical_results_sorted_by_control_id(self) -> None:
+        """Results in the canonical report are always sorted by control_id."""
+        registry = _static_registry("file")
+        controls = list(reversed(_controls()))  # deliberately out of order
+        results, _ = evaluate_controls(host="h", controls=controls, registry=registry)
+        report = build_report(_profile(), controls, results, run_id="x")
+        ids = [r["control_id"] for r in report["results"]]
+        assert ids == sorted(ids), "Canonical report results must be sorted by control_id"
+
+    def test_nist_tag_summary_keys_sorted(self) -> None:
+        """NIST tag summary keys are sorted alphabetically (REQ-7.4)."""
+        registry = _static_registry("file")
+        controls = _controls()
+        results, _ = evaluate_controls(host="h", controls=controls, registry=registry)
+        report = build_report(_profile(), controls, results, run_id="x")
+        nist_keys = list(report["tag_summaries"]["nist"].keys())
+        assert nist_keys == sorted(nist_keys)
+
+    def test_canonical_json_byte_identical_across_runs(self) -> None:
+        """REQ-7.4: identical inputs -> byte-for-byte identical JSON (timestamps normalised)."""
+        registry = _static_registry("file")
+        controls = _controls()
+
+        def _run() -> str:
+            res, _ = evaluate_controls(host="ci", controls=controls, registry=registry)
+            report = build_report(_profile(), controls, res, run_id="stable", redactor=Redactor([]))
+            report["timestamp"] = "NORMALISED"
+            return json.dumps(report, sort_keys=True)
+
+        assert _run() == _run()

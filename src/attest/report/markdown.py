@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+_TOP_FAILURES_LIMIT = 5
+
 
 def _append_summary_section(lines: list[str], report: dict[str, Any]) -> None:
     profile = report.get("profile", {})
@@ -30,16 +32,39 @@ def _append_summary_section(lines: list[str], report: dict[str, Any]) -> None:
     lines.append(f"**Risk score:** {risk_score}")
     lines.append("")
 
+    _append_top_failures(lines, report.get("results", []))
 
-def _append_failures_section(lines: list[str], results: list[dict[str, Any]]) -> None:
-    failures = [r for r in results if r.get("status") == "FAIL"]
+
+def _append_top_failures(lines: list[str], results: list[dict[str, Any]]) -> None:
+    """Append top failing controls by impact for quick executive scanning (REQ-8.2)."""
+    # Include real failures only (not expired waivers - those get their own section).
+    failures = [r for r in results if r.get("status") == "FAIL" and not r.get("waiver_expired")]
+    if not failures:
+        return
+    top = sorted(failures, key=lambda r: r.get("impact", 0.0), reverse=True)[:_TOP_FAILURES_LIMIT]
+    lines.append(f"### Top failing controls (by impact, up to {_TOP_FAILURES_LIMIT})")
+    lines.append("")
+    lines.append("| Control | Title | Impact |")
+    lines.append("|---------|-------|--------|")
+    for r in top:
+        lines.append(f"| {r.get('control_id')} | {r.get('title', '')} | {r.get('impact', '-')} |")
+    lines.append("")
+
+
+def _append_failures_section(lines: list[str], results: list[dict[str, Any]], host: str) -> None:
+    # Real failures only; expired waivers are shown in their own section.
+    failures = [r for r in results if r.get("status") == "FAIL" and not r.get("waiver_expired")]
     if not failures:
         return
 
     lines.append("## Failures")
     lines.append("")
     for result in failures:
-        lines.append(f"### {result.get('control_id')} — {result.get('title', '')}")
+        impact = result.get("impact", "?")
+        lines.append(
+            f"### {result.get('control_id')} - {result.get('title', '')} "
+            f"(host: {host}, impact: {impact})"
+        )
         if result.get("skip_reason"):
             lines.append(f"> {result['skip_reason']}")
         lines.append("")
@@ -60,14 +85,37 @@ def _append_errors_section(lines: list[str], results: list[dict[str, Any]]) -> N
     lines.append("## Errors")
     lines.append("")
     for result in errors:
-        lines.append(f"### {result.get('control_id')} — {result.get('title', '')}")
+        lines.append(f"### {result.get('control_id')} - {result.get('title', '')}")
         for test in result.get("tests", []):
             if test.get("status") == "ERROR":
                 lines.append(f"- **{test.get('name')}**: {test.get('message', 'evaluation error')}")
         lines.append("")
 
 
+def _append_expired_waivers_section(lines: list[str], results: list[dict[str, Any]]) -> None:
+    """Expired waivers are policy breaches and rendered visually distinct (REQ-8.2)."""
+    expired = [r for r in results if r.get("waiver_expired")]
+    if not expired:
+        return
+
+    lines.append("## Expired waivers - policy breach")
+    lines.append("")
+    lines.append(
+        "> These controls have an expired waiver and are counted as FAIL. "
+        "Renew or remediate each waiver immediately."
+    )
+    lines.append("")
+    for result in expired:
+        waiver_id = result.get("waiver_id", "unknown")
+        lines.append(
+            f"- **{result.get('control_id')}** - {result.get('title', '')} "
+            f"(waiver: `{waiver_id}`)"
+        )
+    lines.append("")
+
+
 def _append_waivers_section(lines: list[str], results: list[dict[str, Any]]) -> None:
+    """Active (non-expired) waived controls (REQ-8.2)."""
     waivers = [r for r in results if r.get("status") == "WAIVED"]
     if not waivers:
         return
@@ -76,7 +124,7 @@ def _append_waivers_section(lines: list[str], results: list[dict[str, Any]]) -> 
     lines.append("")
     for result in waivers:
         lines.append(
-            f"- **{result.get('control_id')}** — {result.get('title', '')} "
+            f"- **{result.get('control_id')}** - {result.get('title', '')} "
             f"(waiver: `{result.get('waiver_id', 'unknown')}`)"
         )
     lines.append("")
@@ -89,11 +137,13 @@ def build_markdown(report: dict[str, Any]) -> str:
     then waived/skip sections.
     """
     results = list(report.get("results", []))
+    host = report.get("host", "unknown")
     lines: list[str] = []
 
     _append_summary_section(lines, report)
-    _append_failures_section(lines, results)
+    _append_failures_section(lines, results, host)
     _append_errors_section(lines, results)
+    _append_expired_waivers_section(lines, results)
     _append_waivers_section(lines, results)
 
     return "\n".join(lines)
