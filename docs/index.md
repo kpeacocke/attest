@@ -13,6 +13,7 @@ New to Attest? Read in this order:
 - **[Requirements: REQ-8 and REQ-9](requirements/requirements.md#req-8-operator-experience-ui-and-ux)** — Operator UX and world-class compliance dashboard requirements
 - **[Roadmap phases 5 and 6](roadmap/roadmap.md#phase-5-operator-ui-experience-and-documentation-beta-phase-2)** — Sequencing for UX and dashboard delivery
 - **[Operator workflows](operator/workflows.md)** — First run, failure triage, waiver management, and baseline comparison runbooks
+- **[Offline viewer workflow](operator/workflows.md#workflow-1-first-run)** — Generate and open the single-file HTML viewer artefact
 
 ## For contributors
 

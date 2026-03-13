@@ -125,12 +125,15 @@ def test_run_all_formats(tmp_path: Path) -> None:
             "markdown",
             "--format",
             "summary",
+            "--format",
+            "html",
         ]
     )
     assert (out_dir / "report.json").exists()
     assert (out_dir / "report.xml").exists()
     assert (out_dir / "report.md").exists()
     assert (out_dir / "attest-summary.json").exists()
+    assert (out_dir / "report.html").exists()
 
 
 def test_run_applies_waivers_from_profile_dir(tmp_path: Path) -> None:

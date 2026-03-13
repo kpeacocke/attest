@@ -1,4 +1,4 @@
-"""Tests for JUnit and Markdown reporters (REQ-4.2, REQ-7.3, REQ-8.2)."""
+"""Tests for derived reporters (REQ-4.2, REQ-7.3, REQ-8.2, REQ-8.3)."""
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ from attest.engine.result import ControlResult, ControlStatus
 from attest.policy import schemas as policy_schemas
 from attest.policy.schemas import Control, Profile
 from attest.report.canonical import build_report
+from attest.report import build_html
 from attest.report.junit import build_junit
 from attest.report.markdown import build_markdown
 from attest.report.summary import build_summary
@@ -102,19 +103,78 @@ class TestSummary:
         assert "run_id" in summary
 
 
+class TestHtmlViewer:
+    def test_contains_basic_shell(self) -> None:
+        html = build_html(_base_report(ControlStatus.PASS))
+        assert "<!DOCTYPE html>" in html
+        assert "Attest offline viewer" in html
+
+    def test_contains_filter_controls(self) -> None:
+        html = build_html(_base_report(ControlStatus.FAIL))
+        assert 'id="status-filter"' in html
+        assert 'id="control-filter"' in html
+        assert 'id="host-filter"' in html
+        assert 'id="namespace-filter"' in html
+
+    def test_embeds_report_results(self) -> None:
+        html = build_html(_base_report(ControlStatus.FAIL))
+        assert "const viewerData =" in html
+        assert '"control_id":"X-001"' in html
+
+    def test_preserves_canonical_result_order(self) -> None:
+        profile = Profile(name="p", title="P", version="1.0")
+        controls = [
+            Control(
+                id="B-002",
+                title="Second",
+                tests=[
+                    policy_schemas.TestAssertion(
+                        name="t2", resource="r", operator="eq", expected="x"
+                    )
+                ],
+            ),
+            Control(
+                id="A-001",
+                title="First",
+                tests=[
+                    policy_schemas.TestAssertion(
+                        name="t1", resource="r", operator="eq", expected="x"
+                    )
+                ],
+            ),
+        ]
+        results = [
+            ControlResult(control_id="A-001", status=ControlStatus.PASS, tests=[]),
+            ControlResult(control_id="B-002", status=ControlStatus.FAIL, tests=[]),
+        ]
+        report = build_report(profile, controls, results, run_id="order-test")
+        html = build_html(report)
+        assert html.index('"control_id":"A-001"') < html.index('"control_id":"B-002"')
+
+    def test_reporter_does_not_mutate_report(self) -> None:
+        import copy
+
+        report = _base_report(ControlStatus.FAIL)
+        original = copy.deepcopy(report)
+        build_html(report)
+        assert report == original
+
+
 class TestSingleRunAllReporters:
     """REQ-4.2: all reporters can be generated from a single canonical report dict."""
 
     def test_all_reporters_accept_same_report(self) -> None:
-        """JUnit, Markdown, and Summary all consume the same canonical dict without error."""
+        """JUnit, Markdown, HTML, and Summary all consume the same canonical dict without error."""
         report = _base_report(ControlStatus.FAIL)
 
         junit_xml = build_junit(report)
         markdown_text = build_markdown(report)
+        html_text = build_html(report)
         summary_dict = build_summary(report)
 
         assert "<testsuite" in junit_xml
         assert "# Attest Run Report" in markdown_text
+        assert "Attest offline viewer" in html_text
         assert "fail_count" in summary_dict
 
     def test_reporters_do_not_mutate_canonical_report(self) -> None:
@@ -126,6 +186,7 @@ class TestSingleRunAllReporters:
 
         build_junit(report)
         build_markdown(report)
+        build_html(report)
         build_summary(report)
 
         assert report == original

@@ -53,7 +53,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--format",
         dest="formats",
         action="append",
-        choices=["json", "junit", "markdown", "summary"],
+        choices=["json", "junit", "markdown", "summary", "html"],
         default=None,
         help="Report formats to emit (may be repeated; default: json summary).",
     )
@@ -170,6 +170,8 @@ def _write_run_reports(
     formats: set[str],
 ) -> None:
     """Emit all requested run artefacts from one canonical report."""
+    from importlib import import_module
+
     from attest.report.canonical import write_report
     from attest.report.junit import write_junit
     from attest.report.markdown import write_markdown
@@ -189,6 +191,12 @@ def _write_run_reports(
         md_path = str(out_dir / "report.md")
         write_markdown(report, md_path)
         print(f"Markdown report written: {md_path}")
+
+    if "html" in formats:
+        html_report = import_module("attest.report.html")
+        html_path = str(out_dir / "report.html")
+        html_report.write_html(report, html_path)
+        print(f"HTML viewer written: {html_path}")
 
     if "summary" in formats:
         summary_path = str(out_dir / "attest-summary.json")

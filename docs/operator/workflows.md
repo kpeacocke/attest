@@ -3,7 +3,7 @@
 This guide covers end-to-end workflows for running Attest locally and in CI pipelines.
 Each workflow is designed for daily engineering use as part of a compliance-as-code practice.
 
-Related requirements: REQ-7.1, REQ-7.2, REQ-8.1, REQ-8.4.
+Related requirements: REQ-7.1, REQ-7.2, REQ-8.1, REQ-8.3, REQ-8.4.
 
 ---
 
@@ -50,14 +50,15 @@ attest run ./profiles/my-profile/ --out ./reports/
 
 By default, Attest emits `report.json` and `attest-summary.json` in the output directory.
 
-To emit all supported formats in one invocation (REQ-4.2):
+To emit all supported formats in one invocation (REQ-4.2, REQ-8.3):
 
 ```bash
 attest run ./profiles/my-profile/ --out ./reports/ \
   --format json \
   --format junit \
   --format markdown \
-  --format summary
+  --format summary \
+  --format html
 ```
 
 Expected output artefacts:
@@ -68,6 +69,7 @@ Expected output artefacts:
 | `report.xml` | JUnit XML for CI tooling |
 | `report.md` | Markdown summary for human review |
 | `attest-summary.json` | Small deterministic summary for pipeline gating |
+| `report.html` | Single-file offline viewer with client-side filtering |
 
 **Step 3 - Check the exit code:**
 
@@ -85,6 +87,19 @@ cat reports/attest-summary.json
 ```
 
 The summary includes: run id, profile, host, counts by status, and a risk score.
+
+**Step 5 - Open the offline viewer when you need interactive review:**
+
+Open `reports/report.html` in a browser. The viewer is a single exported artefact for offline review and sharing.
+
+Available client-side filters:
+
+- Status
+- Control ID or title search
+- Host
+- Framework tag namespace (`nist`, `cis_level`, `stig_severity`, `custom`)
+
+The viewer preserves the deterministic ordering from canonical JSON. Filtering only narrows what is shown; it does not reorder controls.
 
 ---
 
