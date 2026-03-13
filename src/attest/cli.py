@@ -3,12 +3,17 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
+from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from attest.waivers.schema import Waiver
+
+
+DASHBOARD_JSON_HELP = "Path to dashboard.json file."
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -62,6 +67,64 @@ def build_parser() -> argparse.ArgumentParser:
     d.add_argument("report_a", help="Path to the first (baseline) report.")
     d.add_argument("report_b", help="Path to the second (current) report.")
     d.add_argument("--out", default=".", help="Output directory for diff artefacts.")
+
+    dash = sub.add_parser("dashboard", help="Build and operate the dashboard artefacts.")
+    dash_sub = dash.add_subparsers(dest="dashboard_cmd", required=True)
+
+    dash_build = dash_sub.add_parser("build", help="Build offline and hosted dashboard artefacts.")
+    dash_build.add_argument(
+        "inputs",
+        nargs="+",
+        help="Canonical report file paths or directories containing report JSON files.",
+    )
+    dash_build.add_argument("--out", default=".", help="Output directory for dashboard artefacts.")
+    dash_build.add_argument(
+        "--slack-webhook",
+        default=None,
+        help="Optional Slack incoming webhook URL for alert delivery.",
+    )
+
+    dash_audit = dash_sub.add_parser(
+        "audit-pack", help="Export a scoped audit pack from dashboard data."
+    )
+    dash_audit.add_argument("dashboard_json", help=DASHBOARD_JSON_HELP)
+    dash_audit.add_argument(
+        "--out", default="audit-pack.json", help="Output path for audit pack JSON."
+    )
+    dash_audit.add_argument("--profile", default=None, help="Optional profile name filter.")
+    dash_audit.add_argument("--host", default=None, help="Optional host filter.")
+    dash_audit.add_argument("--environment", default=None, help="Optional environment filter.")
+    dash_audit.add_argument(
+        "--framework",
+        choices=["nist", "cis_level", "stig_severity"],
+        default=None,
+        help="Optional framework namespace filter.",
+    )
+
+    dash_alerts = dash_sub.add_parser("alerts", help="Build or deliver compliance alerts.")
+    dash_alerts.add_argument("dashboard_json", help=DASHBOARD_JSON_HELP)
+    dash_alerts.add_argument(
+        "--out", default="dashboard-alerts.json", help="Output path for alerts JSON."
+    )
+    dash_alerts.add_argument(
+        "--slack-webhook",
+        default=None,
+        help="Optional Slack incoming webhook URL for alert delivery.",
+    )
+
+    dash_slo = dash_sub.add_parser("slo", help="Evaluate dashboard SLO report.")
+    dash_slo.add_argument("dashboard_json", help=DASHBOARD_JSON_HELP)
+    dash_slo.add_argument(
+        "--out", default="dashboard-slo.json", help="Output path for SLO JSON report."
+    )
+
+    dash_serve = dash_sub.add_parser("serve", help="Serve dashboard artefacts in hosted mode.")
+    dash_serve.add_argument(
+        "dashboard_dir", help="Directory containing dashboard.html and dashboard.json."
+    )
+    dash_serve.add_argument(
+        "--port", type=int, default=8080, help="Port for hosted dashboard mode."
+    )
 
     return p
 
@@ -320,6 +383,187 @@ def _cmd_diff(args: argparse.Namespace) -> int:
     return 0
 
 
+def _collect_report_paths(inputs: list[str]) -> list[Path]:
+    paths: list[Path] = []
+    for raw in inputs:
+        p = Path(raw)
+        if p.is_dir():
+            paths.extend(sorted(p.glob("*.json")))
+            paths.extend(sorted((p / "reports").glob("*.json")) if (p / "reports").exists() else [])
+        elif p.is_file():
+            paths.append(p)
+    return sorted({path.resolve() for path in paths})
+
+
+def _load_dashboard_json(path: Path) -> dict[str, Any]:
+    data = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        raise ValueError(f"Dashboard file '{path}' is not a JSON object.")
+    return data
+
+
+def _cmd_dashboard_build(args: argparse.Namespace) -> int:
+    from attest.report.dashboard import (
+        build_alerts,
+        build_dashboard_dataset,
+        evaluate_slos,
+        load_reports,
+        post_slack_alerts,
+        write_alerts,
+        write_dashboard_dataset,
+        write_slo_report,
+    )
+    from attest.report.dashboard_html import write_dashboard_html
+
+    out_dir = Path(args.out)
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    report_paths = _collect_report_paths(args.inputs)
+    if not report_paths:
+        print("Dashboard input error: no report JSON files were found.", file=sys.stderr)
+        return 4
+
+    reports = load_reports(report_paths)
+    dataset = build_dashboard_dataset(reports)
+    alerts = build_alerts(dataset)
+    dataset["alerts"] = alerts
+    slo = evaluate_slos(dataset)
+
+    dashboard_json = out_dir / "dashboard.json"
+    dashboard_html = out_dir / "dashboard.html"
+    alerts_json = out_dir / "dashboard-alerts.json"
+    slo_json = out_dir / "dashboard-slo.json"
+
+    write_dashboard_dataset(dataset, dashboard_json)
+    write_dashboard_html(dataset, str(dashboard_html))
+    write_alerts(alerts, alerts_json)
+    write_slo_report(slo, slo_json)
+
+    if args.slack_webhook:
+        try:
+            post_slack_alerts(alerts, args.slack_webhook)
+            print("Dashboard alerts delivered to Slack webhook.")
+        except RuntimeError as exc:
+            print(f"Dashboard alert delivery error: {exc}", file=sys.stderr)
+            return 4
+
+    print(f"Dashboard dataset written: {dashboard_json}")
+    print(f"Dashboard viewer written: {dashboard_html}")
+    print(f"Dashboard alerts written: {alerts_json}")
+    print(f"Dashboard SLO report written: {slo_json}")
+    return 0
+
+
+def _cmd_dashboard_audit_pack(args: argparse.Namespace) -> int:
+    from attest.report.dashboard import build_audit_pack, write_audit_pack
+
+    try:
+        dataset = _load_dashboard_json(Path(args.dashboard_json))
+    except (OSError, ValueError) as exc:
+        print(f"Dashboard input error: {exc}", file=sys.stderr)
+        return 4
+
+    pack = build_audit_pack(
+        dataset,
+        profile=args.profile,
+        host=args.host,
+        environment=args.environment,
+        framework=args.framework,
+    )
+    out_path = Path(args.out)
+    write_audit_pack(pack, out_path)
+    print(f"Audit pack written: {out_path}")
+    return 0
+
+
+def _cmd_dashboard_alerts(args: argparse.Namespace) -> int:
+    from attest.report.dashboard import build_alerts, post_slack_alerts, write_alerts
+
+    try:
+        dataset = _load_dashboard_json(Path(args.dashboard_json))
+    except (OSError, ValueError) as exc:
+        print(f"Dashboard input error: {exc}", file=sys.stderr)
+        return 4
+
+    alerts = build_alerts(dataset)
+    out_path = Path(args.out)
+    write_alerts(alerts, out_path)
+    print(f"Dashboard alerts written: {out_path}")
+
+    if args.slack_webhook:
+        try:
+            post_slack_alerts(alerts, args.slack_webhook)
+            print("Dashboard alerts delivered to Slack webhook.")
+        except RuntimeError as exc:
+            print(f"Dashboard alert delivery error: {exc}", file=sys.stderr)
+            return 4
+    return 0
+
+
+def _cmd_dashboard_slo(args: argparse.Namespace) -> int:
+    from attest.report.dashboard import evaluate_slos, write_slo_report
+
+    try:
+        dataset = _load_dashboard_json(Path(args.dashboard_json))
+    except (OSError, ValueError) as exc:
+        print(f"Dashboard input error: {exc}", file=sys.stderr)
+        return 4
+
+    slo = evaluate_slos(dataset)
+    out_path = Path(args.out)
+    write_slo_report(slo, out_path)
+    print(f"Dashboard SLO report written: {out_path}")
+    if not all(bool(v) for v in slo.get("passes", {}).values()):
+        return 2
+    return 0
+
+
+def _cmd_dashboard_serve(args: argparse.Namespace) -> int:
+    dashboard_dir = Path(args.dashboard_dir)
+    if not dashboard_dir.exists() or not dashboard_dir.is_dir():
+        print(f"Dashboard input error: '{dashboard_dir}' is not a directory.", file=sys.stderr)
+        return 4
+
+    index_path = dashboard_dir / "dashboard.html"
+    if not index_path.exists():
+        print(
+            f"Dashboard input error: '{index_path}' was not found. Run 'attest dashboard build' first.",
+            file=sys.stderr,
+        )
+        return 4
+
+    class _Handler(SimpleHTTPRequestHandler):
+        def __init__(self, *handler_args: Any, **handler_kwargs: Any) -> None:
+            super().__init__(*handler_args, directory=str(dashboard_dir), **handler_kwargs)
+
+    server = ThreadingHTTPServer(("0.0.0.0", int(args.port)), _Handler)
+    print(
+        f"Dashboard hosted mode serving '{dashboard_dir}' on http://127.0.0.1:{args.port}/dashboard.html"
+    )
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        print("Dashboard server stopped.")
+    finally:
+        server.server_close()
+    return 0
+
+
+def _cmd_dashboard(args: argparse.Namespace) -> int:
+    if args.dashboard_cmd == "build":
+        return _cmd_dashboard_build(args)
+    if args.dashboard_cmd == "audit-pack":
+        return _cmd_dashboard_audit_pack(args)
+    if args.dashboard_cmd == "alerts":
+        return _cmd_dashboard_alerts(args)
+    if args.dashboard_cmd == "slo":
+        return _cmd_dashboard_slo(args)
+    if args.dashboard_cmd == "serve":
+        return _cmd_dashboard_serve(args)
+    print(f"Unknown dashboard command: {args.dashboard_cmd}", file=sys.stderr)
+    return 4
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
     p = build_parser()
@@ -337,6 +581,9 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.cmd == "diff":
         return _cmd_diff(args)
+
+    if args.cmd == "dashboard":
+        return _cmd_dashboard(args)
 
     print(f"Unknown command: {args.cmd}", file=sys.stderr)
     return 4

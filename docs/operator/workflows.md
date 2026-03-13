@@ -3,7 +3,7 @@
 This guide covers end-to-end workflows for running Attest locally and in CI pipelines.
 Each workflow is designed for daily engineering use as part of a compliance-as-code practice.
 
-Related requirements: REQ-7.1, REQ-7.2, REQ-8.1, REQ-8.3, REQ-8.4.
+Related requirements: REQ-7.1, REQ-7.2, REQ-8.1, REQ-8.3, REQ-8.4, REQ-9.1, REQ-9.2, REQ-9.3, REQ-9.4, REQ-9.5, REQ-9.6, REQ-9.7, REQ-9.8.
 
 ---
 
@@ -275,6 +275,93 @@ jq '.new_failures' reports/diff/diff.json
 jq '.new_passes' reports/diff/diff.json
 jq '.waiver_changes' reports/diff/diff.json
 ```
+
+---
+
+## Workflow 5: Build the compliance dashboard artefacts
+
+Use `attest dashboard build` to aggregate canonical reports and generate offline and hosted dashboard outputs.
+
+```bash
+attest dashboard build ./reports/ --out ./dashboard/
+```
+
+Output artefacts:
+
+| File | Description |
+|------|-------------|
+| `dashboard.json` | Aggregated dataset for posture trends, framework rollups, waivers, and triage |
+| `dashboard.html` | Single-file dashboard view for operators |
+| `dashboard-alerts.json` | Alert payload generated from trend and regression data |
+| `dashboard-slo.json` | SLO evaluation report over latest posture signals |
+
+The dashboard includes:
+
+- Posture trend series by run, host, profile, and environment (REQ-9.1)
+- Top regressions and changed-since-last-good triage views (REQ-9.2)
+- Waiver governance board with active, expiring, and expired buckets (REQ-9.3)
+- Framework rollups and coverage for NIST, CIS, and STIG tags (REQ-9.4)
+
+---
+
+## Workflow 6: Export evidence for auditors
+
+Build a scoped audit pack from an existing `dashboard.json` dataset:
+
+```bash
+attest dashboard audit-pack ./dashboard/dashboard.json \
+  --framework nist \
+  --host prod-host-1 \
+  --out ./dashboard/audit-pack.json
+```
+
+The audit pack preserves canonical evidence while narrowing scope by profile, host, environment, or framework namespace (REQ-9.5).
+
+---
+
+## Workflow 7: Generate and deliver compliance alerts
+
+Create alert outputs from dashboard data:
+
+```bash
+attest dashboard alerts ./dashboard/dashboard.json --out ./dashboard/alerts.json
+```
+
+Optional Slack delivery for operations channels:
+
+```bash
+attest dashboard alerts ./dashboard/dashboard.json \
+  --out ./dashboard/alerts.json \
+  --slack-webhook "$SLACK_WEBHOOK_URL"
+```
+
+Alert categories include risk-score spikes, new critical failures, expired waivers, and control regressions (REQ-9.6).
+
+---
+
+## Workflow 8: Evaluate dashboard SLOs
+
+Generate SLO status from dashboard posture:
+
+```bash
+attest dashboard slo ./dashboard/dashboard.json --out ./dashboard/dashboard-slo.json
+```
+
+If one or more SLO targets fail, the command exits with code `2` so CI can gate on compliance service levels (REQ-9.7).
+
+---
+
+## Workflow 9: Run hosted dashboard mode
+
+Serve dashboard artefacts for local hosted operation:
+
+```bash
+attest dashboard serve ./dashboard/ --port 8080
+```
+
+Then open `http://127.0.0.1:8080/dashboard.html` for interactive use (REQ-9.8).
+
+Hosted mode serves generated static artefacts only; rebuild with `attest dashboard build` when new reports are available.
 
 ---
 
