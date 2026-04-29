@@ -72,7 +72,7 @@ jobs:
 
       - name: Download coverage report
         if: ${{ env.SONAR_TOKEN != '' && env.SONAR_PROJECT_KEY != '' }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: python-coverage
           path: .
