@@ -9,7 +9,7 @@ packages = [{ include = "attest", from = "src" }]
 
 [tool.poetry.dependencies]
 python = "^3.14"
-pydantic = "^2.8.2"
+pydantic = "^2.13.3"
 pyyaml = "^6.0.3"
 packaging = "^26.0"
 
