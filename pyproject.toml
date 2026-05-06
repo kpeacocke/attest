@@ -11,7 +11,7 @@ packages = [{ include = "attest", from = "src" }]
 python = "^3.14"
 pydantic = "^2.13.3"
 pyyaml = "^6.0.3"
-packaging = "^26.0"
+packaging = "^26.2"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^9.0.3"
