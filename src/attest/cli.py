@@ -69,6 +69,11 @@ def build_parser() -> argparse.ArgumentParser:
     d.add_argument("report_b", help="Path to the second (current) report.")
     d.add_argument("--out", default=".", help="Output directory for diff artefacts.")
 
+    metrics = sub.add_parser("metrics", help="Evaluate anonymised operator success metrics.")
+    metrics.add_argument("baseline", help="Path to baseline metric observations CSV.")
+    metrics.add_argument("current", help="Path to current metric observations CSV.")
+    metrics.add_argument("--out", default="operator-metrics.json", help="Output JSON report path.")
+
     dash = sub.add_parser("dashboard", help="Build and operate the dashboard artefacts.")
     dash_sub = dash.add_subparsers(dest="dashboard_cmd", required=True)
 
@@ -403,6 +408,23 @@ def _load_dashboard_json(path: Path) -> dict[str, Any]:
     return data
 
 
+def _cmd_metrics(args: argparse.Namespace) -> int:
+    from attest.report.operator_metrics import evaluate_operator_metrics, load_observations
+
+    try:
+        baseline = load_observations(Path(args.baseline))
+        current = load_observations(Path(args.current))
+        report = evaluate_operator_metrics(baseline, current)
+        output = Path(args.out)
+        output.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    except (OSError, ValueError) as exc:
+        print(f"Metrics input error: {exc}", file=sys.stderr)
+        return 4
+
+    print(f"Operator metrics written: {output}")
+    return 0
+
+
 def _cmd_dashboard_build(args: argparse.Namespace) -> int:
     from attest.report.dashboard import (
         build_alerts,
@@ -582,6 +604,9 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.cmd == "diff":
         return _cmd_diff(args)
+
+    if args.cmd == "metrics":
+        return _cmd_metrics(args)
 
     if args.cmd == "dashboard":
         return _cmd_dashboard(args)

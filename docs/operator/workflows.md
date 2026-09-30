@@ -408,6 +408,31 @@ fi
 
 ---
 
+## Measure operator outcomes (REQ-8.5)
+
+Collect opt-in, anonymised baseline and current observations over comparable profile scopes and operator cohorts. Each CSV has exactly `metric,value` columns; keep operator names, hosts, control IDs, evidence and other identifiers out of these files. Record:
+
+- `triage_seconds`: elapsed time from a failed run becoming available until the root-cause control is identified.
+- `audit_pack_seconds`: elapsed time from agreeing a scoped review to completing its audit evidence pack.
+- `expired_waiver_miss`: one row per expired waiver, `1` if it was not noticed before expiry or `0` if it was.
+
+For example, with measured observations in `baseline.csv` and `current.csv`:
+
+```csv
+metric,value
+triage_seconds,180
+audit_pack_seconds,900
+expired_waiver_miss,0
+```
+
+```bash
+attest metrics baseline.csv current.csv --out operator-metrics.json
+```
+
+The deterministic JSON records sample counts, means and target results. Triage must improve by at least 50% against a non-zero baseline; average audit-pack time must be **under** 1800 seconds; the working definition of near-zero is at most 1% missed expiry events. Missing observations produce `null` target results, not a pass. The command reports measurements but does not invent a baseline, automatically track user activity, or prove an improvement from a tiny sample. Collect enough real observations before claiming REQ-8.5 acceptance. Invalid input exits with code `4`.
+
+---
+
 ## Package and container delivery (REQ-10.1 to REQ-10.4)
 
 The tag-triggered package release workflow requires a tag matching `pyproject.toml` (for example `v0.1.0`), a configured `SNYK_TOKEN` repository secret, and GitHub Actions permission to publish GHCR images. It tests the package, scans both images for critical vulnerabilities before publishing, and uploads wheel, source archive, runtime constraints, checksums and image digests to GitHub Releases. Image SBOM attestations are attached to the digest-pinned GHCR images. Release notes link to the [changelog](../../CHANGELOG.md). Do not create a release tag until the secret and registry permissions are ready. Newly published GHCR packages may require a registry login or a visibility change before operators can pull them.

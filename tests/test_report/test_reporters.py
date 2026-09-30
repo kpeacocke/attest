@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
+import pytest
+
 from attest.engine import result as engine_result
 from attest.engine.result import ControlResult, ControlStatus
 from attest.policy import schemas as policy_schemas
@@ -10,6 +14,7 @@ from attest.report.canonical import build_report
 from attest.report import build_html
 from attest.report.junit import build_junit
 from attest.report.markdown import build_markdown
+from attest.report.operator_metrics import evaluate_operator_metrics, load_observations
 from attest.report.summary import build_summary
 
 
@@ -101,6 +106,56 @@ class TestSummary:
         assert summary["pass_count"] == 0
         assert "risk_score" in summary
         assert "run_id" in summary
+
+
+def test_operator_metrics_targets_and_missing_samples(tmp_path: Path) -> None:
+    baseline_file = tmp_path / "baseline.csv"
+    baseline_file.write_text(
+        "metric,value\ntriage_seconds,120\ntriage_seconds,240\n"
+        "audit_pack_seconds,2000\nexpired_waiver_miss,1\n",
+        encoding="utf-8",
+    )
+    current_file = tmp_path / "current.csv"
+    current_file.write_text(
+        "metric,value\ntriage_seconds,60\ntriage_seconds,90\n"
+        "audit_pack_seconds,1200\nexpired_waiver_miss,0\n",
+        encoding="utf-8",
+    )
+    result = evaluate_operator_metrics(load_observations(baseline_file), load_observations(current_file))
+    assert result["triage"]["reduction_ratio"] == 0.5833
+    assert result["triage"]["meets_target"] is True
+    assert result["audit_pack"]["meets_target"] is True
+    assert result["audit_pack"]["baseline_mean_seconds"] == 2000
+    assert result["expired_waivers"]["meets_target"] is True
+    assert result["expired_waivers"]["baseline_misses"] == 1
+
+    empty_file = tmp_path / "empty.csv"
+    empty_file.write_text("metric,value\n", encoding="utf-8")
+    empty = evaluate_operator_metrics(load_observations(empty_file), load_observations(empty_file))
+    assert empty["triage"]["meets_target"] is None
+    assert empty["audit_pack"]["meets_target"] is None
+    assert empty["expired_waivers"]["meets_target"] is None
+
+
+def test_operator_metrics_do_not_claim_boundary_success() -> None:
+    baseline = {
+        "triage_seconds": [0], "audit_pack_seconds": [], "expired_waiver_miss": []
+    }
+    current = {
+        "triage_seconds": [100], "audit_pack_seconds": [1800], "expired_waiver_miss": [1]
+    }
+    result = evaluate_operator_metrics(baseline, current)
+    assert result["triage"]["meets_target"] is None
+    assert result["audit_pack"]["meets_target"] is False
+    assert result["expired_waivers"]["meets_target"] is False
+
+
+@pytest.mark.parametrize("row", ["triage_seconds,-1", "expired_waiver_miss,2", "triage_seconds,nan", "unknown,4"])
+def test_operator_metrics_reject_invalid_observations(tmp_path: Path, row: str) -> None:
+    source = tmp_path / "invalid.csv"
+    source.write_text(f"metric,value\n{row}\n", encoding="utf-8")
+    with pytest.raises(ValueError):
+        load_observations(source)
 
 
 class TestHtmlViewer:
