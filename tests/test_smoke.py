@@ -21,6 +21,24 @@ def test_version_exits_zero(capsys: pytest.CaptureFixture[str]) -> None:
     assert out.strip() == f"attest {version('attest')}"
 
 
+def test_metrics_writes_deterministic_summary(tmp_path: Path) -> None:
+    baseline = tmp_path / "baseline.csv"
+    current = tmp_path / "current.csv"
+    baseline.write_text("metric,value\ntriage_seconds,120\n", encoding="utf-8")
+    current.write_text("metric,value\ntriage_seconds,60\n", encoding="utf-8")
+    report_path = tmp_path / "metrics.json"
+    assert main(["metrics", str(baseline), str(current), "--out", str(report_path)]) == 0
+    assert json.loads(report_path.read_text(encoding="utf-8"))["triage"]["meets_target"] is True
+    assert '"audit_pack"' in report_path.read_text(encoding="utf-8")
+
+
+def test_metrics_rejects_invalid_csv(tmp_path: Path) -> None:
+    malformed = tmp_path / "invalid.csv"
+    malformed.write_text("metric,value\ntriage_seconds,nan\n", encoding="utf-8")
+    assert main(["metrics", str(malformed), str(malformed)]) == 4
+    assert not (tmp_path / "operator-metrics.json").exists()
+
+
 def test_runtime_constraints_include_only_locked_runtime_packages() -> None:
     script = Path(__file__).resolve().parents[1] / "scripts" / "runtime_constraints.py"
     result = subprocess.run(
