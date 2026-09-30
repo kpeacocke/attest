@@ -15,7 +15,7 @@ permissions:
 
 env:
   PYTHON_VERSION: "3.14"
-  POETRY_VERSION: "1.8.4"
+  POETRY_VERSION: "2.2.1"
 
 jobs:
   python:
