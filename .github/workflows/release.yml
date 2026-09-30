@@ -105,9 +105,11 @@ jobs:
           docker buildx build --target dashboard --push --sbom=true --provenance=true \
             --tag "$repo-dashboard:$GITHUB_REF_NAME" --tag "$repo-dashboard:latest" \
             --metadata-file dashboard-metadata.json .
+          cli_digest="$(jq -er '."containerimage.digest" | select(test("^sha256:[a-f0-9]{64}$"))' cli-metadata.json)"
+          dashboard_digest="$(jq -er '."containerimage.digest" | select(test("^sha256:[a-f0-9]{64}$"))' dashboard-metadata.json)"
           printf 'CLI: %s@%s\nDashboard: %s-dashboard@%s\n' \
-            "$repo" "$(jq -r '."containerimage.digest"' cli-metadata.json)" \
-            "$repo" "$(jq -r '."containerimage.digest"' dashboard-metadata.json)" \
+            "$repo" "$cli_digest" \
+            "$repo" "$dashboard_digest" \
             > image-digests.txt
 
       - uses: actions/upload-artifact@v7
