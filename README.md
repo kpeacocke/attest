@@ -25,7 +25,7 @@ Attest lets you version compliance checks alongside infrastructure, run continuo
 - **Deterministic reporting** — Consistent outputs (JSON, JUnit, Markdown) suitable for compliance pipelines
 - **Exception management** — Waivers with expiry and justification built in
 - **Ansible-native** — No new DSL; uses Ansible facts, roles, and variables you already have
-- **Flexible delivery** — Ship as installable packages and official containers, with Compose-first hosted startup
+- **Local installation** — Install from source with Poetry; versioned package releases are prepared by the release workflow
 
 ## Quick example
 
@@ -70,7 +70,8 @@ Run against your inventory, get evidence, track drift, manage exceptions.
 
 **Early bootstrap.** Architecture and docs in place. Implementation intentionally minimal. [Current roadmap →](docs/roadmap/roadmap.md)
 
-Delivery model is defined as **packages + official containers**. Compose is the first hosted deployment target.
+The package release workflow publishes wheels and source archives when a matching version tag is pushed. No versioned release or official container image has been published yet. Hosted mode currently serves prebuilt dashboard artefacts; a Compose stack with continuous ingestion is planned.
+The repository includes a non-root CLI image, a dashboard image for prebuilt artefacts, and a localhost-only Compose reference. See the [operator delivery workflow](docs/operator/workflows.md#package-and-container-delivery-req-101-to-req-104) for build and deployment steps. Official versioned images remain unpublished until the release security gate is configured and passed.
 
 ## Quick start
 
@@ -80,6 +81,15 @@ cd attest
 poetry install
 poetry run attest --help
 ```
+
+For a tagged release, download its wheel and `constraints.txt` from GitHub Releases, then install with Python 3.14:
+
+```bash
+python -m pip install --constraint constraints.txt ./attest-0.1.0-py3-none-any.whl
+attest version
+```
+
+Pin the release tag or wheel URL and retain its `SHA256SUMS` alongside the [changelog](CHANGELOG.md) for CI installs. These artefacts become available when `v0.1.0` is released; until then use the Poetry source install above.
 
 See the [full documentation](docs/index.md) for examples, architecture, and how to contribute.
 

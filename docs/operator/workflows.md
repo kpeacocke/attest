@@ -9,14 +9,14 @@ Related requirements: REQ-7.1, REQ-7.2, REQ-8.1, REQ-8.3, REQ-8.4, REQ-9.1, REQ-
 
 ## Prerequisites
 
-Install Attest via Poetry (development) or pip (release):
+Install Attest from source with Poetry. After a version tag has been released, download its wheel and `constraints.txt` from GitHub Releases for pinned CI or local installs (REQ-10.1):
 
 ```bash
 # Development
 poetry install
 
-# Release (once published)
-pip install attest
+# Release (after v0.1.0 is published)
+python -m pip install --constraint constraints.txt ./attest-0.1.0-py3-none-any.whl
 ```
 
 Verify the installation:
@@ -405,6 +405,32 @@ if [ "$FAIL_COUNT" -gt "0" ]; then
   exit 2
 fi
 ```
+
+---
+
+## Package and container delivery (REQ-10.1 to REQ-10.4)
+
+The tag-triggered package release workflow requires a tag matching `pyproject.toml` (for example `v0.1.0`), a configured `SNYK_TOKEN` repository secret, and GitHub Actions permission to publish GHCR images. It tests the package, scans both images for critical vulnerabilities before publishing, and uploads wheel, source archive, runtime constraints, checksums and image digests to GitHub Releases. Image SBOM attestations are attached to the digest-pinned GHCR images. Release notes link to the [changelog](../../CHANGELOG.md). Do not create a release tag until the secret and registry permissions are ready. Newly published GHCR packages may require a registry login or a visibility change before operators can pull them.
+
+After a release, run the CLI with a versioned image and a mounted profile directory:
+
+```bash
+docker run --rm --read-only -v "$PWD:/work" ghcr.io/kpeacocke/attest:v0.1.0 version
+```
+
+The hosted dashboard currently serves **prebuilt** artefacts from a read-only mounted directory. Build them first from canonical reports, then start the Compose reference (REQ-10.3):
+
+```bash
+attest dashboard build ./reports/report.json --out ./dashboard
+export ATTEST_DASHBOARD_DIR="$PWD/dashboard"
+docker compose up -d
+docker compose ps
+# Open http://localhost:8080/dashboard.html after the dashboard service is healthy.
+docker compose down
+```
+
+For a local image build before the first published tag, run `docker build --target dashboard -t attest-dashboard:local .` and set `ATTEST_DASHBOARD_IMAGE=attest-dashboard:local` before `docker compose up -d`. Set `ATTEST_DASHBOARD_PORT` to change the host port. The mounted directory is the current hosted data store; Compose does not add continuous report ingestion or a database.
+Compose binds the dashboard to localhost by default. Do not expose this HTTP endpoint directly to untrusted networks; put an authenticated TLS reverse proxy in front of it when remote access is required. The package/container parity check compares canonical, JUnit, Markdown, HTML and dashboard exports while excluding generated run IDs, timestamps and time-derived freshness durations (REQ-10.5).
 
 ---
 

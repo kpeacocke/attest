@@ -6,6 +6,7 @@ import argparse
 import json
 import sys
 from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
+from importlib.metadata import version
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -570,7 +571,7 @@ def main(argv: list[str] | None = None) -> int:
     args = p.parse_args(argv)
 
     if args.cmd == "version":
-        print("attest 0.1.0")
+        print(f"attest {version('attest')}")
         return 0
 
     if args.cmd == "validate":

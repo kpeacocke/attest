@@ -1,0 +1,11 @@
+services:
+  dashboard:
+    image: ${ATTEST_DASHBOARD_IMAGE:-ghcr.io/kpeacocke/attest-dashboard:v0.1.0}
+    ports:
+      - "127.0.0.1:${ATTEST_DASHBOARD_PORT:-8080}:8080"
+    volumes:
+      - ${ATTEST_DASHBOARD_DIR:?set ATTEST_DASHBOARD_DIR to built dashboard artefacts}:/data:ro
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
