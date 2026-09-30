@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import json
+import subprocess
+import sys
 import textwrap
+from importlib.metadata import version
 from pathlib import Path
 
 import pytest
@@ -15,7 +18,19 @@ def test_version_exits_zero(capsys: pytest.CaptureFixture[str]) -> None:
     rc = main(["version"])
     out = capsys.readouterr().out
     assert rc == 0
-    assert "attest" in out.lower()
+    assert out.strip() == f"attest {version('attest')}"
+
+
+def test_runtime_constraints_include_only_locked_runtime_packages() -> None:
+    script = Path(__file__).resolve().parents[1] / "scripts" / "runtime_constraints.py"
+    result = subprocess.run(
+        [sys.executable, str(script)], capture_output=True, text=True, check=True
+    )
+    packages = result.stdout.splitlines()
+    assert packages == sorted(packages, key=lambda package: package.split("==")[0])
+    assert "pydantic==2.13.4" in packages
+    assert "packaging==26.2" in packages
+    assert not any(package.startswith(("pytest==", "ruff==")) for package in packages)
 
 
 def _make_profile_dir(

@@ -1,0 +1,142 @@
+name: Package release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+
+      - name: Install Poetry
+        run: pip install "poetry==2.2.1"
+
+      - name: Verify release version
+        run: test "$GITHUB_REF_NAME" = "v$(poetry version --short)"
+
+      - name: Install and check package
+        run: |
+          poetry install --no-interaction
+          poetry run ruff check .
+          poetry run pytest -q
+
+      - name: Build reproducible package artefacts
+        run: |
+          poetry build
+          python scripts/runtime_constraints.py > dist/constraints.txt
+          python -m venv /tmp/attest-package-check
+          /tmp/attest-package-check/bin/pip install --constraint dist/constraints.txt dist/*.whl
+          /tmp/attest-package-check/bin/attest version
+          sha256sum dist/*.whl dist/*.tar.gz dist/constraints.txt > dist/SHA256SUMS
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: package-release
+          path: dist/
+          if-no-files-found: error
+
+  images:
+    runs-on: ubuntu-latest
+    needs: package
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build images for security scanning
+        run: |
+          docker build --target cli --tag attest-cli:scan .
+          docker build --target dashboard --tag attest-dashboard:scan .
+          test "$(docker run --rm --entrypoint id attest-cli:scan -u)" = 10001
+          docker run --rm attest-cli:scan version
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "20"
+
+      - name: Scan images before publishing
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        run: |
+          test -n "$SNYK_TOKEN" || { echo "SNYK_TOKEN is required to publish images." >&2; exit 1; }
+          npm install --global snyk
+          snyk container test attest-cli:scan --file=Dockerfile --severity-threshold=critical
+          snyk container test attest-dashboard:scan --file=Dockerfile --severity-threshold=critical
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: package-release
+          path: dist
+
+      - name: Check package and container parity
+        run: |
+          python -m pip install --constraint dist/constraints.txt dist/*.whl
+          python scripts/check_container_parity.py
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish versioned images with SBOM attestations
+        run: |
+          repo="ghcr.io/${GITHUB_REPOSITORY,,}"
+          docker buildx build --target cli --push --sbom=true --provenance=true \
+            --tag "$repo:$GITHUB_REF_NAME" --tag "$repo:latest" \
+            --metadata-file cli-metadata.json .
+          docker buildx build --target dashboard --push --sbom=true --provenance=true \
+            --tag "$repo-dashboard:$GITHUB_REF_NAME" --tag "$repo-dashboard:latest" \
+            --metadata-file dashboard-metadata.json .
+          cli_digest="$(jq -er '."containerimage.digest" | select(test("^sha256:[a-f0-9]{64}$"))' cli-metadata.json)"
+          dashboard_digest="$(jq -er '."containerimage.digest" | select(test("^sha256:[a-f0-9]{64}$"))' dashboard-metadata.json)"
+          printf 'CLI: %s@%s\nDashboard: %s-dashboard@%s\n' \
+            "$repo" "$cli_digest" \
+            "$repo" "$dashboard_digest" \
+            > image-digests.txt
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: image-digests
+          path: image-digests.txt
+          if-no-files-found: error
+
+  release:
+    runs-on: ubuntu-latest
+    needs: [package, images]
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: package-release
+          path: dist
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: image-digests
+
+      - name: Publish release metadata and artefacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/* image-digests.txt --verify-tag \
+            --notes "See [CHANGELOG.md](https://github.com/$GITHUB_REPOSITORY/blob/$GITHUB_REF_NAME/CHANGELOG.md). Image digests are in image-digests.txt; SBOM attestations are attached to the OCI image digests in GHCR."

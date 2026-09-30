@@ -42,6 +42,14 @@ jobs:
       - name: Test
         run: poetry run pytest -q --cov=attest --cov-report=xml:coverage.xml
 
+      - name: Build and smoke-test package
+        run: |
+          poetry build
+          python scripts/runtime_constraints.py > dist/constraints.txt
+          python -m venv /tmp/attest-package-check
+          /tmp/attest-package-check/bin/pip install --constraint dist/constraints.txt dist/*.whl
+          /tmp/attest-package-check/bin/attest version
+
       - name: Upload coverage report
         uses: actions/upload-artifact@v7
         with:
