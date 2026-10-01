@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 from subprocess import CompletedProcess
 
@@ -129,14 +130,16 @@ class TestFileResource:
 class TestCommandResource:
     def test_executes_command(self) -> None:
         resource = CommandResource()
-        result = resource.query({"command": "printf hello"})
+        result = resource.query({"command": f'"{sys.executable}" -c "print(42)"'})
         assert not result.errors
         assert result.data["rc"] == 0
-        assert result.data["stdout"] == "hello"
+        assert result.data["stdout"] == "42\n"
 
     def test_timeout_returns_error(self) -> None:
         resource = CommandResource()
-        result = resource.query({"command": "sleep 2", "timeout": 1})
+        result = resource.query(
+            {"command": f'"{sys.executable}" -c "import time; time.sleep(2)"', "timeout": 1}
+        )
         assert result.errors
         assert "timed out" in result.errors[0]
 

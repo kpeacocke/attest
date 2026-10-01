@@ -23,17 +23,17 @@ class UserResource:
                 timings={},
             )
 
-        if not shutil.which("getent"):
-            return ResourceResult(
-                data=None,
-                errors=["'getent' command is not available on this host."],
-                timings={},
-            )
-
         if username is None:
             return ResourceResult(
                 data=None,
                 errors=["'user' resource requires a 'name' parameter."],
+                timings={},
+            )
+
+        if not shutil.which("getent"):
+            return ResourceResult(
+                data=None,
+                errors=["'getent' command is not available on this host."],
                 timings={},
             )
 

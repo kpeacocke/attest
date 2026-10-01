@@ -23,17 +23,17 @@ class GroupResource:
                 timings={},
             )
 
-        if not shutil.which("getent"):
-            return ResourceResult(
-                data=None,
-                errors=["'getent' command is not available on this host."],
-                timings={},
-            )
-
         if groupname is None:
             return ResourceResult(
                 data=None,
                 errors=["'group' resource requires a 'name' parameter."],
+                timings={},
+            )
+
+        if not shutil.which("getent"):
+            return ResourceResult(
+                data=None,
+                errors=["'getent' command is not available on this host."],
                 timings={},
             )
 
