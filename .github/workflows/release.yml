@@ -37,7 +37,7 @@ jobs:
           python -m venv /tmp/attest-package-check
           /tmp/attest-package-check/bin/pip install --constraint dist/constraints.txt dist/*.whl
           /tmp/attest-package-check/bin/attest version
-          sha256sum dist/*.whl dist/*.tar.gz dist/constraints.txt > dist/SHA256SUMS
+          (cd dist && sha256sum ./*.whl ./*.tar.gz ./constraints.txt > SHA256SUMS)
 
       - uses: actions/upload-artifact@v7
         with:
