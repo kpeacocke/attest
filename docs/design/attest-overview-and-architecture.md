@@ -163,7 +163,7 @@ Attest uses GitHub-native tools exclusively:
 - **GitHub Projects** for milestone planning and roadmap tracking
 - **GitHub Discussions** for RFC-style design discussions
 - **GitHub Actions** for CI/CD automation
-- **Snyk** for automated security scanning
+- **Trivy** for critical-vulnerability scanning of release images
 - **SonarQube** for code quality and technical debt analysis
 
 See [Contributing guide](../../CONTRIBUTING.md) for workflow details.

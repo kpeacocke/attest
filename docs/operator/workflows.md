@@ -435,7 +435,7 @@ The deterministic JSON records sample counts, means and target results. Triage m
 
 ## Package and container delivery (REQ-10.1 to REQ-10.4)
 
-The tag-triggered package release workflow requires a tag matching `pyproject.toml` (for example `v0.1.0`), a configured `SNYK_TOKEN` repository secret, and GitHub Actions permission to publish GHCR images. It tests the package, scans both images for critical vulnerabilities before publishing, and uploads wheel, source archive, runtime constraints, checksums and image digests to GitHub Releases. Image SBOM attestations are attached to the digest-pinned GHCR images. Release notes link to the [changelog](../../CHANGELOG.md). Do not create a release tag until the secret and registry permissions are ready. Newly published GHCR packages may require a registry login or a visibility change before operators can pull them.
+The tag-triggered package release workflow requires a tag matching `pyproject.toml` (for example `v0.1.0`) and GitHub Actions permission to publish GHCR images. It tests the package, scans both images with Trivy for critical vulnerabilities before publishing, and uploads wheel, source archive, runtime constraints, checksums and image digests to GitHub Releases. Image SBOM attestations are attached to the digest-pinned GHCR images. Release notes link to the [changelog](../../CHANGELOG.md). Do not create a release tag until registry permissions are ready and the image scans can pass. Newly published GHCR packages may require a registry login or a visibility change before operators can pull them.
 
 After a release, run the CLI with a versioned image and a mounted profile directory:
 

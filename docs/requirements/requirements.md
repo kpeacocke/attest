@@ -629,7 +629,7 @@ Container delivery SHALL satisfy minimum security and provenance controls.
 
 **Acceptance:**
 
-- Container images are scanned in CI with Snyk before release.
+- Container images are scanned in CI for critical vulnerabilities before release.
 - Release metadata includes image digest references and SBOM location.
 - Critical vulnerabilities in first-party image layers block release unless explicitly waived.
 

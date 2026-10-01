@@ -33,7 +33,7 @@ When adding implementation beyond the current bootstrap, place modules in the pl
 - For Python changes, run the smallest relevant test set first, then `poetry run pytest` when feasible.
 - Run `poetry run ruff check .` after Python edits and fix newly introduced issues.
 - Treat Pylance diagnostics as first-class feedback for type safety, imports, and unreachable code.
-- Treat Snyk and SonarQube findings as required review signals for changed code and dependency updates.
+- Treat SonarQube findings for changed code and Trivy findings for release images as review signals.
 - If you introduce or change dependencies, prefer the safest minimal option and document why.
 
 ## Security and Evidence

@@ -400,7 +400,7 @@ See [Scope for v0.1-beta](attest-overview-and-architecture.md#scope-for-v01-beta
 **Quality gates (CI):**
 
 - All tests pass: `pytest`
-- Code quality: `ruff check .`, Pylance-clean changed code, Snyk security scans, SonarQube analysis
+- Code quality: `ruff check .`, Pylance-clean changed code, SonarQube analysis when configured; Trivy scans release images
 - Documentation is updated if behaviour changes
 
 **Contributor automation:**

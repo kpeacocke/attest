@@ -1,14 +1,7 @@
 {
-    "remote.extensionKind": {
-        "snyk-security.snyk-vulnerability-scanner": [
-            "workspace"
-        ]
-    },
-    "snyk.advanced.autoSelectOrganization": true,
     "python.testing.pytestArgs": [
         "tests"
     ],
     "python.testing.unittestEnabled": false,
-    "python.testing.pytestEnabled": true,
-    "snyk.advanced.organization": "16296024-d80b-4481-bbf6-92e2a42b462e"
+    "python.testing.pytestEnabled": true
 }

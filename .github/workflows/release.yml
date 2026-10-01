@@ -63,18 +63,23 @@ jobs:
           test "$(docker run --rm --entrypoint id attest-cli:scan -u)" = 10001
           docker run --rm attest-cli:scan version
 
-      - uses: actions/setup-node@v7
+      - name: Scan CLI image before publishing
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
-          node-version: "20"
+          image-ref: attest-cli:scan
+          scan-type: image
+          scanners: vuln
+          severity: CRITICAL
+          exit-code: '1'
 
-      - name: Scan images before publishing
-        env:
-          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-        run: |
-          test -n "$SNYK_TOKEN" || { echo "SNYK_TOKEN is required to publish images." >&2; exit 1; }
-          npm install --global snyk
-          snyk container test attest-cli:scan --file=Dockerfile --severity-threshold=critical
-          snyk container test attest-dashboard:scan --file=Dockerfile --severity-threshold=critical
+      - name: Scan dashboard image before publishing
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: attest-dashboard:scan
+          scan-type: image
+          scanners: vuln
+          severity: CRITICAL
+          exit-code: '1'
 
       - uses: actions/setup-python@v7
         with:

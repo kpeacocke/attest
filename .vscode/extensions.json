@@ -3,7 +3,6 @@
     "ms-python.python",
     "ms-python.vscode-pylance",
     "charliermarsh.ruff",
-    "snyk-security.snyk-vulnerability-scanner",
     "SonarSource.sonarlint-vscode"
   ]
 }
