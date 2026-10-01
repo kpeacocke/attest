@@ -18,9 +18,9 @@ Attest is built in **four distinct layers**, each with clear responsibility boun
 Attest's execution pipeline flows through these layers:
 
 ```text
-Policy layer (parse/validate) → 
-Resource layer (gather facts) → 
-Engine/runner layer (evaluate) → 
+Policy layer (parse/validate) →
+Resource layer (gather facts) →
+Engine/runner layer (evaluate) →
 Reporting layer (output reports)
 ```
 
