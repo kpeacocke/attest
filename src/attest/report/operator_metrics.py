@@ -4,10 +4,49 @@ from __future__ import annotations
 
 import csv
 import math
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from statistics import mean
+from typing import TypedDict
 
 METRICS = ("triage_seconds", "audit_pack_seconds", "expired_waiver_miss")
+
+
+class TriageMetrics(TypedDict):
+    baseline_samples: int
+    current_samples: int
+    baseline_mean_seconds: float | None
+    current_mean_seconds: float | None
+    reduction_ratio: float | None
+    target_reduction_ratio: float
+    meets_target: bool | None
+
+
+class AuditPackMetrics(TypedDict):
+    baseline_samples: int
+    baseline_mean_seconds: float | None
+    samples: int
+    mean_seconds: float | None
+    target_under_seconds: int
+    meets_target: bool | None
+
+
+class ExpiredWaiverMetrics(TypedDict):
+    baseline_samples: int
+    baseline_misses: int
+    baseline_miss_rate: float | None
+    samples: int
+    misses: int
+    miss_rate: float | None
+    target_max_miss_rate: float
+    meets_target: bool | None
+
+
+class OperatorMetricsReport(TypedDict):
+    schema_version: str
+    triage: TriageMetrics
+    audit_pack: AuditPackMetrics
+    expired_waivers: ExpiredWaiverMetrics
 
 
 def load_observations(path: Path) -> dict[str, list[float]]:
@@ -33,8 +72,8 @@ def load_observations(path: Path) -> dict[str, list[float]]:
 
 
 def evaluate_operator_metrics(
-    baseline: dict[str, list[float]], current: dict[str, list[float]]
-) -> dict[str, object]:
+    baseline: Mapping[str, Sequence[float]], current: Mapping[str, Sequence[float]]
+) -> OperatorMetricsReport:
     baseline_triage = baseline["triage_seconds"]
     current_triage = current["triage_seconds"]
     baseline_audit = baseline["audit_pack_seconds"]

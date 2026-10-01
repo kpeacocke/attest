@@ -4,9 +4,16 @@ from __future__ import annotations
 
 import shutil
 import subprocess
-from typing import Any
+from typing import Any, TypedDict
 
 from attest.resources.interfaces import ResourceResult
+
+
+class PortListener(TypedDict):
+    protocol: str
+    state: str
+    address: str
+    port: int
 
 
 class PortResource:
@@ -55,7 +62,7 @@ class PortResource:
             listeners = [listener for listener in listeners if listener["port"] == parsed_port]
 
         listeners.sort(
-            key=lambda item: (str(item["protocol"]), int(item["port"]), str(item["address"]))
+            key=lambda item: (item["protocol"], item["port"], item["address"])
         )
         data = {
             "listening": bool(listeners),
@@ -79,8 +86,8 @@ class PortResource:
             return int(value.strip())
         return None
 
-    def _parse_ss_output(self, output: str) -> list[dict[str, object]]:
-        listeners: list[dict[str, object]] = []
+    def _parse_ss_output(self, output: str) -> list[PortListener]:
+        listeners: list[PortListener] = []
         for raw_line in output.splitlines():
             line = raw_line.strip()
             if not line:

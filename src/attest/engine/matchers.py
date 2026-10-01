@@ -7,7 +7,7 @@ Failures produce structured evidence: observed, expected, operator, and message.
 from __future__ import annotations
 
 import re
-from typing import Any
+from typing import Any, Callable
 
 from packaging.version import InvalidVersion, Version
 
@@ -173,7 +173,7 @@ def match_cmp(actual: Any, expected: Any) -> tuple[bool, str]:
 # Dispatcher
 # ---------------------------------------------------------------------------
 
-_MATCHERS = {
+_MATCHERS: dict[str, Callable[[Any, Any], tuple[bool, str]]] = {
     "eq": match_eq,
     "ne": match_ne,
     "contains": match_contains,

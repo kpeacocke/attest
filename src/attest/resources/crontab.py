@@ -32,7 +32,12 @@ class CrontabResource:
         )
 
         if search_field is not None and isinstance(search_field, str):
-            all_entries = [e for e in all_entries if search_field.lower() in e["full_line"].lower()]
+            search_text = search_field.lower()
+            all_entries = [
+                entry
+                for entry in all_entries
+                if search_text in str(entry["full_line"]).lower()
+            ]
 
         data = {
             "entries": all_entries,

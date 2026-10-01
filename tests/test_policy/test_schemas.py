@@ -26,11 +26,13 @@ class TestProfileSchema:
         assert p.name == "my_profile-v2"
 
     def test_inputs_list(self) -> None:
-        p = Profile(
-            name="p",
-            title="P",
-            version="1.0",
-            inputs=[{"name": "env", "type": "string", "required": True}],
+        p = Profile.model_validate(
+            {
+                "name": "p",
+                "title": "P",
+                "version": "1.0",
+                "inputs": [{"name": "env", "type": "string", "required": True}],
+            }
         )
         assert p.inputs[0].required is True
 
@@ -48,12 +50,14 @@ class TestProfileInput:
 
 class TestControlSchema:
     def test_valid_minimal_control(self) -> None:
-        c = Control(
-            id="LH-001",
-            title="SSH root login disabled",
-            tests=[
-                {"name": "check sshd", "resource": "sshd_config", "operator": "eq", "expected": "no"}
-            ],
+        c = Control.model_validate(
+            {
+                "id": "LH-001",
+                "title": "SSH root login disabled",
+                "tests":[
+                    {"name": "check sshd", "resource": "sshd_config", "operator": "eq", "expected": "no"}
+                ],
+            }
         )
         assert c.id == "LH-001"
         assert len(c.tests) == 1
@@ -74,10 +78,12 @@ class TestControlSchema:
 
     def test_invalid_operator_raises(self) -> None:
         with pytest.raises(ValidationError, match="not supported"):
-            Control(
-                id="X-001",
-                title="T",
-                tests=[{"name": "t", "resource": "r", "operator": "magic", "expected": "x"}],
+            Control.model_validate(
+                {
+                    "id": "X-001",
+                    "title": "T",
+                    "tests":[{"name": "t", "resource": "r", "operator": "magic", "expected": "x"}],
+                }
             )
 
 

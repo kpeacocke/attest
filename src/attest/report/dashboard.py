@@ -5,12 +5,20 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 from urllib import error, request
 
 from attest.diff.differ import diff_reports
 
 DASHBOARD_SCHEMA_VERSION = "1.0"
+
+
+def _as_mapping(value: object) -> dict[str, Any]:
+    return cast(dict[str, Any], value) if isinstance(value, dict) else {}
+
+
+def _as_list(value: object) -> list[Any]:
+    return cast(list[Any], value) if isinstance(value, list) else []
 
 
 def _parse_timestamp(value: str) -> datetime:
@@ -21,9 +29,9 @@ def _parse_timestamp(value: str) -> datetime:
 
 
 def _normalise_report(report: dict[str, Any]) -> dict[str, Any]:
-    profile = report.get("profile", {}) if isinstance(report.get("profile"), dict) else {}
-    summary = report.get("summary", {}) if isinstance(report.get("summary"), dict) else {}
-    counts = summary.get("counts", {}) if isinstance(summary.get("counts"), dict) else {}
+    profile = _as_mapping(report.get("profile"))
+    summary = _as_mapping(report.get("summary"))
+    counts = _as_mapping(summary.get("counts"))
     return {
         "run_id": str(report.get("run_id", "")),
         "timestamp": str(report.get("timestamp", "")),
@@ -55,7 +63,7 @@ def load_reports(paths: list[Path]) -> list[dict[str, Any]]:
         data = json.loads(path.read_text(encoding="utf-8"))
         if not isinstance(data, dict):
             raise ValueError(f"Report '{path}' is not a JSON object.")
-        reports.append(_normalise_report(data))
+        reports.append(_normalise_report(cast(dict[str, Any], data)))
     reports.sort(key=lambda r: (_parse_timestamp(r["timestamp"]), r["run_id"]))
     return reports
 
@@ -75,6 +83,35 @@ def _extract_nist_family(control_id: str) -> str:
     return control_id
 
 
+def _add_framework_count(
+    counts: dict[str, dict[str, int]], key: str, status: str
+) -> None:
+    bucket = counts.setdefault(key, {"PASS": 0, "FAIL": 0, "ERROR": 0})
+    if status in bucket:
+        bucket[status] += 1
+
+
+def _rate_table(data: dict[str, dict[str, int]], kind: str) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for key in sorted(data):
+        row = data[key]
+        total = max(1, row["PASS"] + row["FAIL"] + row["ERROR"])
+        rows.append(
+            {
+                kind: key,
+                "counts": row,
+                "pass_rate": round(row["PASS"] / total, 4),
+                "fail_rate": round(row["FAIL"] / total, 4),
+                "error_rate": round(row["ERROR"] / total, 4),
+            }
+        )
+    return rows
+
+
+def _coverage(mapped: int, total: int) -> dict[str, int]:
+    return {"mapped": mapped, "unmapped": max(0, total - mapped), "total": total}
+
+
 def _framework_rollups(latest_results: list[dict[str, Any]]) -> dict[str, Any]:
     """Build framework rates and coverage for NIST, CIS, and STIG."""
     nist_counts: dict[str, dict[str, int]] = {}
@@ -85,73 +122,36 @@ def _framework_rollups(latest_results: list[dict[str, Any]]) -> dict[str, Any]:
 
     for row in latest_results:
         status = str(row.get("status", "UNKNOWN"))
-        tags = row.get("tags", {}) if isinstance(row.get("tags"), dict) else {}
+        tags = _as_mapping(row.get("tags"))
 
-        nist_tags = tags.get("nist", []) if isinstance(tags.get("nist"), list) else []
+        nist_tags = _as_list(tags.get("nist"))
         if nist_tags:
             mapped["nist"] += 1
             for tag in sorted(str(t) for t in nist_tags):
-                fam = _extract_nist_family(tag)
-                bucket = nist_counts.setdefault(fam, {"PASS": 0, "FAIL": 0, "ERROR": 0})
-                if status in bucket:
-                    bucket[status] += 1
+                _add_framework_count(nist_counts, _extract_nist_family(tag), status)
 
         cis_level = tags.get("cis_level")
         if cis_level not in (None, ""):
             mapped["cis_level"] += 1
-            cis_key = str(cis_level)
-            bucket = cis_counts.setdefault(cis_key, {"PASS": 0, "FAIL": 0, "ERROR": 0})
-            if status in bucket:
-                bucket[status] += 1
+            _add_framework_count(cis_counts, str(cis_level), status)
 
         stig = tags.get("stig_severity")
         if stig not in (None, ""):
             mapped["stig_severity"] += 1
-            stig_key = str(stig)
-            bucket = stig_counts.setdefault(stig_key, {"PASS": 0, "FAIL": 0, "ERROR": 0})
-            if status in bucket:
-                bucket[status] += 1
-
-    def _rate_table(data: dict[str, dict[str, int]], kind: str) -> list[dict[str, Any]]:
-        rows: list[dict[str, Any]] = []
-        for key in sorted(data):
-            row = data[key]
-            total = max(1, row["PASS"] + row["FAIL"] + row["ERROR"])
-            rows.append(
-                {
-                    kind: key,
-                    "counts": row,
-                    "pass_rate": round(row["PASS"] / total, 4),
-                    "fail_rate": round(row["FAIL"] / total, 4),
-                    "error_rate": round(row["ERROR"] / total, 4),
-                }
-            )
-        return rows
+            _add_framework_count(stig_counts, str(stig), status)
 
     return {
         "nist": {
             "families": _rate_table(nist_counts, "family"),
-            "coverage": {
-                "mapped": mapped["nist"],
-                "unmapped": max(0, total_controls - mapped["nist"]),
-                "total": total_controls,
-            },
+            "coverage": _coverage(mapped["nist"], total_controls),
         },
         "cis_level": {
             "levels": _rate_table(cis_counts, "level"),
-            "coverage": {
-                "mapped": mapped["cis_level"],
-                "unmapped": max(0, total_controls - mapped["cis_level"]),
-                "total": total_controls,
-            },
+            "coverage": _coverage(mapped["cis_level"], total_controls),
         },
         "stig_severity": {
             "levels": _rate_table(stig_counts, "severity"),
-            "coverage": {
-                "mapped": mapped["stig_severity"],
-                "unmapped": max(0, total_controls - mapped["stig_severity"]),
-                "total": total_controls,
-            },
+            "coverage": _coverage(mapped["stig_severity"], total_controls),
         },
     }
 
@@ -162,9 +162,10 @@ def _waiver_board(latest: dict[str, Any], now: datetime) -> dict[str, Any]:
     expired: list[dict[str, Any]] = []
 
     for result in latest.get("results", []):
-        waiver = result.get("waiver")
-        if not isinstance(waiver, dict):
+        raw_waiver = result.get("waiver")
+        if not isinstance(raw_waiver, dict):
             continue
+        waiver = cast(dict[str, Any], raw_waiver)
         expiry_raw = waiver.get("expiry")
         expiry = (
             _parse_timestamp(str(expiry_raw))
@@ -174,7 +175,7 @@ def _waiver_board(latest: dict[str, Any], now: datetime) -> dict[str, Any]:
         days_to_expiry = (
             (expiry - now).days if expiry != datetime.max.replace(tzinfo=timezone.utc) else 10**9
         )
-        row = {
+        row: dict[str, Any] = {
             "waiver_id": str(result.get("waiver_id", waiver.get("id", ""))),
             "control_id": str(result.get("control_id", "")),
             "host": str(latest.get("host", "unknown")),
@@ -288,7 +289,7 @@ def build_dashboard_dataset(reports: list[dict[str, Any]]) -> dict[str, Any]:
     now = datetime.now(tz=timezone.utc)
     latest = reports[-1]
 
-    dataset = {
+    dataset: dict[str, Any] = {
         "schema_version": DASHBOARD_SCHEMA_VERSION,
         "generated_at": now.isoformat(),
         "runs": reports,
@@ -307,6 +308,17 @@ def build_dashboard_dataset(reports: list[dict[str, Any]]) -> dict[str, Any]:
 def write_dashboard_dataset(dataset: dict[str, Any], path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(dataset, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+
+
+def _matches_framework(result: dict[str, Any], framework: str | None) -> bool:
+    if not framework:
+        return True
+    tags = _as_mapping(result.get("tags"))
+    if framework == "nist":
+        return bool(tags.get("nist"))
+    if framework in ("cis_level", "stig_severity"):
+        return tags.get(framework) not in (None, "")
+    return True
 
 
 def build_audit_pack(
@@ -329,30 +341,20 @@ def build_audit_pack(
         if environment and run.get("environment") != environment:
             continue
 
-        run_copy = {
+        selected_results: list[dict[str, Any]] = []
+        for result in run.get("results", []):
+            if _matches_framework(result, framework):
+                selected_results.append(result)
+
+        run_copy: dict[str, Any] = {
             "run_id": run.get("run_id", ""),
             "timestamp": run.get("timestamp", ""),
             "profile": run.get("profile", {}),
             "host": run.get("host", ""),
             "environment": run.get("environment", "unknown"),
             "summary": run.get("summary", {}),
-            "results": [],
+            "results": sorted(selected_results, key=lambda row: str(row.get("control_id", ""))),
         }
-
-        for result in run.get("results", []):
-            if framework:
-                tags = result.get("tags", {}) if isinstance(result.get("tags"), dict) else {}
-                if framework == "nist" and not tags.get("nist"):
-                    continue
-                if framework == "cis_level" and tags.get("cis_level") in (None, ""):
-                    continue
-                if framework == "stig_severity" and tags.get("stig_severity") in (None, ""):
-                    continue
-            run_copy["results"].append(result)
-
-        run_copy["results"] = sorted(
-            run_copy["results"], key=lambda r: str(r.get("control_id", ""))
-        )
         scoped_runs.append(run_copy)
 
     scoped_runs.sort(
@@ -501,9 +503,9 @@ def post_slack_alerts(alerts: dict[str, Any], webhook_url: str) -> None:
 
 def evaluate_slos(dataset: dict[str, Any]) -> dict[str, Any]:
     """Evaluate dashboard SLO proxies for latency and freshness (REQ-9.8)."""
-    runs = list(dataset.get("runs", []))
-    latest = runs[-1] if runs else {}
-    latest_results = list(latest.get("results", []))
+    runs = _as_list(dataset.get("runs"))
+    latest: dict[str, Any] = _as_mapping(runs[-1]) if runs else {}
+    latest_results = _as_list(latest.get("results"))
     generated_at = _parse_timestamp(str(dataset.get("generated_at", "")))
     latest_ts = _parse_timestamp(str(latest.get("timestamp", "")))
     freshness_seconds = max(0.0, (generated_at - latest_ts).total_seconds())

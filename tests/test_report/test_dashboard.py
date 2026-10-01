@@ -179,12 +179,30 @@ class TestDashboardExportsAndAlerts:
     def test_build_audit_pack_applies_scope(self) -> None:
         now = datetime.now(tz=timezone.utc)
         dataset = build_dashboard_dataset(
-            [_run("r1", now.isoformat(), risk=0.1, results=[_result("C-1", "PASS", nist=["AC-3"])])]
+            [
+                _run(
+                    "r1",
+                    now.isoformat(),
+                    risk=0.1,
+                    results=[
+                        _result("C-3", "PASS", cis_level=2, stig="CAT I"),
+                        _result("C-1", "PASS", nist=["AC-3"], stig="CAT II"),
+                        _result("C-4", "PASS"),
+                        _result("C-2", "PASS", cis_level=1),
+                    ],
+                )
+            ]
         )
 
-        pack = build_audit_pack(dataset, framework="nist")
-        assert pack["scope"]["framework"] == "nist"
-        assert pack["runs"][0]["results"][0]["control_id"] == "C-1"
+        for framework, expected in (
+            ("nist", ["C-1"]),
+            ("cis_level", ["C-2", "C-3"]),
+            ("stig_severity", ["C-1", "C-3"]),
+            (None, ["C-1", "C-2", "C-3", "C-4"]),
+        ):
+            pack = build_audit_pack(dataset, framework=framework)
+            assert pack["scope"]["framework"] == framework
+            assert [row["control_id"] for row in pack["runs"][0]["results"]] == expected
 
     def test_build_alerts_contains_risk_spike(self) -> None:
         now = datetime.now(tz=timezone.utc)

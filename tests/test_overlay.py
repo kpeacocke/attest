@@ -252,7 +252,7 @@ class TestOverlayResolver:
             inputs=[],
             depends=[],
         )
-        overlay_controls = []
+        overlay_controls: list[Control] = []
 
         result_profile, _ = resolver.apply_overlays(
             simple_base_profile,

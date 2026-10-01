@@ -28,6 +28,7 @@ jobs:
         run: |
           poetry install --no-interaction
           poetry run ruff check .
+          poetry run mypy src tests
           poetry run pytest -q
 
       - name: Build reproducible package artefacts

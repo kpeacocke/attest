@@ -31,6 +31,7 @@ poetry install
 poetry run attest --help
 poetry run pytest
 poetry run ruff check .
+poetry run mypy src tests
 ```
 
 On Windows, run the full Linux checks without bind-mounting the local virtualenv:
@@ -71,6 +72,7 @@ All PRs must pass:
 
 - **Tests** — `poetry run pytest`
 - **Linting** — `poetry run ruff check .`
+- **Types** — `poetry run mypy src tests`
 - **Release security** — Trivy blocks images with critical vulnerabilities before publication
 - **Code quality** — SonarQube analysis when configured
 - **Documentation** — Updated if behaviour changes

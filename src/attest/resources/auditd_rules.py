@@ -47,10 +47,11 @@ class AuditdRulesResource:
 
         rules = self._parse_auditctl_output(completed.stdout)
 
-        if search_pattern is not None:
-            rules = [r for r in rules if search_pattern.lower() in r["raw_rule"].lower()]
+        if isinstance(search_pattern, str):
+            search_text = search_pattern.lower()
+            rules = [rule for rule in rules if search_text in str(rule["raw_rule"]).lower()]
 
-        rules.sort(key=lambda r: r["raw_rule"])
+        rules.sort(key=lambda rule: str(rule["raw_rule"]))
 
         data = {
             "rules": rules,

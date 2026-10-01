@@ -9,6 +9,7 @@ from attest.engine.result import ControlStatus
 from attest.policy import schemas as policy_schemas
 from attest.policy.schemas import Control
 from attest.resources.builtin import build_builtin_registry
+from attest.resources.interfaces import ResourceRegistry
 
 
 def _control(
@@ -374,7 +375,7 @@ class TestForEachEvaluator:
 class TestOverlayProvenanceInEvaluator:
     """REQ-4.1: overlay provenance is propagated from Control to ControlResult."""
 
-    def _static_registry(self) -> object:
+    def _static_registry(self) -> ResourceRegistry:
         from attest.resources.interfaces import ResourceRegistry, ResourceResult
 
         class _OsHandler:

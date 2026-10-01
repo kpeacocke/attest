@@ -5,9 +5,16 @@ from __future__ import annotations
 import shutil
 import subprocess
 from pathlib import Path
-from typing import Any
+from typing import Any, TypedDict
 
 from attest.resources.interfaces import ResourceResult
+
+
+class ProcessRecord(TypedDict):
+    pid: int
+    user: str
+    name: str
+    capabilities: str | None
 
 
 class ProcessResource:
@@ -56,7 +63,7 @@ class ProcessResource:
         if parsed_pid is not None:
             processes = [proc for proc in processes if proc["pid"] == parsed_pid]
 
-        processes.sort(key=lambda proc: (int(proc["pid"]), str(proc["name"])))
+        processes.sort(key=lambda proc: (proc["pid"], proc["name"]))
 
         data = {
             "exists": bool(processes),
@@ -81,8 +88,8 @@ class ProcessResource:
             return int(pid.strip())
         return None
 
-    def _parse_ps_output(self, output: str) -> list[dict[str, object]]:
-        processes: list[dict[str, object]] = []
+    def _parse_ps_output(self, output: str) -> list[ProcessRecord]:
+        processes: list[ProcessRecord] = []
         for raw_line in output.splitlines():
             line = raw_line.strip()
             if not line:

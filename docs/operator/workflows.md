@@ -64,7 +64,7 @@ attest run ./profiles/my-profile/ --out ./reports/ \
 Expected output artefacts:
 
 | File | Description |
-|------|-------------|
+| ------ | ------------- |
 | `report.json` | Canonical JSON report (all evidence) |
 | `report.xml` | JUnit XML for CI tooling |
 | `report.md` | Markdown summary for human review |
@@ -74,7 +74,7 @@ Expected output artefacts:
 **Step 3 - Check the exit code:**
 
 | Exit code | Meaning |
-|-----------|---------|
+| ----------- | --------- |
 | 0 | All controls PASS (WAIVED controls are allowed) |
 | 2 | One or more controls FAIL |
 | 3 | One or more controls ERROR (could not be evaluated) |
@@ -204,7 +204,7 @@ attest run ./profiles/my-profile/ --out ./reports/ --waivers ./waivers/prod.yml
 **Waiver behaviour:**
 
 | Waiver state | Control status | Exit code impact |
-|-------------|----------------|-----------------|
+| ------------- | ---------------- | ----------------- |
 | Active (not expired) | WAIVED | 0 (no impact) |
 | Expired | FAIL with `waiver_expired: true` | 2 |
 
@@ -262,7 +262,7 @@ Output artefacts:
 **Exit codes for `attest diff`:**
 
 | Exit code | Meaning |
-|-----------|---------|
+| ----------- | --------- |
 | 0 | No new failures or errors since baseline |
 | 2 | New failures detected since baseline |
 | 3 | New errors detected since baseline |
@@ -289,7 +289,7 @@ attest dashboard build ./reports/ --out ./dashboard/
 Output artefacts:
 
 | File | Description |
-|------|-------------|
+| ------ | ------------- |
 | `dashboard.json` | Aggregated dataset for posture trends, framework rollups, waivers, and triage |
 | `dashboard.html` | Single-file dashboard view for operators |
 | `dashboard-alerts.json` | Alert payload generated from trend and regression data |

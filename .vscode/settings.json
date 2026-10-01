@@ -3,5 +3,16 @@
         "tests"
     ],
     "python.testing.unittestEnabled": false,
-    "python.testing.pytestEnabled": true
+    "python.testing.pytestEnabled": true,
+    "cSpell.words": [
+        "anonymised",
+        "artefacts",
+        "behaviour",
+        "drilldown",
+        "normalise",
+        "pullable",
+        "pyproject",
+        "rollups",
+        "STIG"
+    ]
 }
