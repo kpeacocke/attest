@@ -23,7 +23,7 @@ This project uses:
 - **GitHub Issues** for issue tracking
 - **GitHub Projects** for milestone and roadmap tracking
 - **GitHub Actions** for CI/CD
-- **Snyk** for security scanning
+- **Trivy** for release image scanning
 - **SonarQube** for code quality
 
 We do not use JIRA or other external project management tools.

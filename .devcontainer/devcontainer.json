@@ -12,15 +12,9 @@
         "ms-python.python",
         "ms-python.vscode-pylance",
         "charliermarsh.ruff",
-        "snyk-security.snyk-vulnerability-scanner",
         "SonarSource.sonarlint-vscode"
       ],
       "settings": {
-        "remote.extensionKind": {
-          "snyk-security.snyk-vulnerability-scanner": [
-            "workspace"
-          ]
-        },
         "python.defaultInterpreterPath": "/usr/local/bin/python",
         "python.analysis.typeCheckingMode": "basic",
         "editor.formatOnSave": true,

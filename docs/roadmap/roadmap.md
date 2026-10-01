@@ -56,7 +56,7 @@ Initial MVP with core compliance capabilities:
 - Ship versioned package releases for CLI/runtime use in local and CI workflows ([REQ-10](requirements/requirements.md#req-10-packaging-and-container-delivery))
 - Publish official container images for CLI and hosted dashboard components ([REQ-10](requirements/requirements.md#req-10-packaging-and-container-delivery))
 - Deliver Compose-first reference deployment (`compose.yaml`) for hosted mode startup ([REQ-10](requirements/requirements.md#req-10-packaging-and-container-delivery))
-- Enforce image security and provenance gates (Snyk scan, digest/SBOM metadata) in release workflow ([REQ-10](requirements/requirements.md#req-10-packaging-and-container-delivery))
+- Enforce image security and provenance gates (Trivy scan, digest/SBOM metadata) in release workflow ([REQ-10](requirements/requirements.md#req-10-packaging-and-container-delivery))
 - Validate runtime parity between package mode and container mode outputs ([REQ-10](requirements/requirements.md#req-10-packaging-and-container-delivery))
 
 For detailed requirements breakdown, see [Requirements](requirements/requirements.md).
@@ -65,7 +65,7 @@ For detailed requirements breakdown, see [Requirements](requirements/requirement
 
 All development follows these quality gates:
 
-- **Snyk** security scanning (no high/critical vulnerabilities in first-party code)
+- **Trivy** critical-vulnerability scanning before image publication
 - **SonarQube** quality analysis (maintain healthy technical debt ratio)
 - **GitHub Actions** CI/CD (all tests and lints must pass)
 

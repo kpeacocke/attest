@@ -32,5 +32,5 @@ New to Attest? Read in this order:
 
 - All documentation is written in Australian English
 - GitHub Issues and Projects are the source of truth for work tracking
-- Snyk and SonarQube enforce security and quality gates during CI
+- SonarQube runs when configured; Trivy scans images before tagged releases
 - Delivery model is installable packages plus official containers; Compose is the first hosted deployment target

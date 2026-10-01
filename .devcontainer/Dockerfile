@@ -10,7 +10,4 @@ RUN apt-get update \
 # Poetry is required for this project's workflow
 RUN pip install --no-cache-dir --upgrade pip poetry
 
-# Snyk CLI for security scanning
-RUN npm install -g snyk
-
 WORKDIR /workspaces/attest

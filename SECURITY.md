@@ -8,7 +8,8 @@ This project is in early development. Security fixes will be released on the lat
 
 Attest uses:
 
-- **Snyk** for automated security scanning of dependencies and first-party code
+- **Trivy** for critical-vulnerability scanning of container images before release
+- **SonarQube** for code analysis when configured
 - **GitHub Security Advisories** for vulnerability disclosure and coordination
 - **GitHub Dependabot** for automated dependency updates
 
