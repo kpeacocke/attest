@@ -33,6 +33,12 @@ poetry run pytest
 poetry run ruff check .
 ```
 
+On Windows, run the full Linux checks without bind-mounting the local virtualenv:
+
+```bash
+docker build --target test --tag attest:test .
+```
+
 Prefer container-based development? Open the repository in the dev container defined in `.devcontainer/devcontainer.json`.
 It includes a minimal extension set with Python, Ruff, and SonarQube support.
 The dev container builds from a project Dockerfile and uses Python 3.14 to match project requirements.
