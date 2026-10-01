@@ -68,10 +68,9 @@ Run against your inventory, get evidence, track drift, manage exceptions.
 
 ## Status
 
-**Early bootstrap.** Architecture and docs in place. Implementation intentionally minimal. [Current roadmap →](docs/roadmap/roadmap.md)
+**Early beta.** The CLI, reports, and prebuilt hosted dashboard are available; continuous hosted ingestion remains planned. [Current roadmap →](docs/roadmap/roadmap.md)
 
-The package release workflow publishes wheels and source archives when a matching version tag is pushed. No versioned release or official container image has been published yet. Hosted mode currently serves prebuilt dashboard artefacts; a Compose stack with continuous ingestion is planned.
-The repository includes a non-root CLI image, a dashboard image for prebuilt artefacts, and a localhost-only Compose reference. See the [operator delivery workflow](docs/operator/workflows.md#package-and-container-delivery-req-101-to-req-104) for build and deployment steps. Official versioned images remain unpublished until the release security gate is configured and passed.
+[v0.1.0](https://github.com/kpeacocke/attest/releases/tag/v0.1.0) provides a Python wheel and source archive with pinned runtime constraints, plus non-root CLI and dashboard images in GHCR. The localhost-only Compose reference serves prebuilt dashboard artefacts; it does not ingest reports continuously. See the [operator delivery workflow](docs/operator/workflows.md#package-and-container-delivery-req-101-to-req-104) for build and deployment steps.
 
 ## Quick start
 
@@ -82,14 +81,17 @@ poetry install
 poetry run attest --help
 ```
 
-For a tagged release, download its wheel and `constraints.txt` from GitHub Releases, then install with Python 3.14:
+For a pinned v0.1.0 install with Python 3.14 and the GitHub CLI:
 
 ```bash
+gh release download v0.1.0 -R kpeacocke/attest \
+  --pattern 'attest-0.1.0-py3-none-any.whl' --pattern 'constraints.txt' --pattern 'SHA256SUMS'
+sha256sum --check SHA256SUMS
 python -m pip install --constraint constraints.txt ./attest-0.1.0-py3-none-any.whl
 attest version
 ```
 
-Pin the release tag or wheel URL and retain its `SHA256SUMS` alongside the [changelog](CHANGELOG.md) for CI installs. These artefacts become available when `v0.1.0` is released; until then use the Poetry source install above.
+Pin the release tag or wheel URL and retain its `SHA256SUMS` alongside the [changelog](CHANGELOG.md) for CI installs. The wheel is published on GitHub Releases, not PyPI.
 
 See the [full documentation](docs/index.md) for examples, architecture, and how to contribute.
 
