@@ -96,7 +96,7 @@ jobs:
           python -m pip install --constraint dist/constraints.txt dist/*.whl
           python scripts/check_container_parity.py
 
-      - uses: docker/login-action@v3
+      - uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
